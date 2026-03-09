@@ -1,0 +1,115 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.3}
+        QEMU_APT_PACKAGES: ${QEMU_APT_PACKAGES:-qemu-utils}
+    container_name: ${COMPOSE_PROJECT_NAME}_app
+    restart: unless-stopped
+    user: "0:0"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/etc/php-app/local.ini
+      - /etc/QemuWebControl:/etc/QemuWebControl:ro
+      - /var/qemu/VM:/var/qemu/VM
+      - /var/qemu/qmp:/var/qemu/qmp
+      - ${QEMU_ISO_VOLUME:-/var/lib/qemu/iso}:/var/lib/qemu/iso:ro
+      - ${QEMU_ISO_UPLOAD_STAGING:-/var/lib/qemu/iso-staging}:/var/lib/qemu/iso-staging
+      - /srv/iso:/srv/iso:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - qemu_network
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - QEMU_CONTROL_SERVICE_URL=${QEMU_CONTROL_SERVICE_URL:-http://host.docker.internal:50054}
+      - BOOT_MEDIA_SERVICE_URL=${BOOT_MEDIA_SERVICE_URL:-http://host.docker.internal:50052}
+
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_nginx
+    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "${APP_PORT}:80"
+      - "${APP_SSL_PORT}:443"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    networks:
+      - qemu_network
+    depends_on:
+      - app
+
+  db:
+    image: mariadb:11.2
+    container_name: ${COMPOSE_PROJECT_NAME}_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ${COMPOSE_PROJECT_NAME}_dbdata:/var/lib/mysql
+    networks:
+      - qemu_network
+    ports:
+      - "${DB_EXTERNAL_PORT}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.3}
+        QEMU_APT_PACKAGES: ${QEMU_APT_PACKAGES:-qemu-utils}
+    container_name: ${COMPOSE_PROJECT_NAME}_scheduler
+    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/etc/php-app/local.ini
+      - /etc/QemuWebControl:/etc/QemuWebControl:ro
+      - /var/qemu/VM:/var/qemu/VM
+      - /var/qemu/qmp:/var/qemu/qmp
+      - ${QEMU_ISO_VOLUME:-/var/lib/qemu/iso}:/var/lib/qemu/iso:ro
+      - ${QEMU_ISO_UPLOAD_STAGING:-/var/lib/qemu/iso-staging}:/var/lib/qemu/iso-staging
+      - /srv/iso:/srv/iso:ro
+    networks:
+      - qemu_network
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command: -c "while true; do php /var/www/artisan schedule:run --verbose --no-interaction; sleep 60; done"
+
+networks:
+  qemu_network:
+    driver: bridge
+
+volumes:
+  qemu_dbdata:

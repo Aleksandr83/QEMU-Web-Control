@@ -1,0 +1,12 @@
+[Unit]
+Description=QEMU Control Service (external QEMU via gRPC)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/QemuControlService /etc/QemuWebControl/qemu-control.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

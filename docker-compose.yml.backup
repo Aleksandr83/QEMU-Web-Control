@@ -1,0 +1,81 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./docker/php/zz-docker.conf:/usr/local/etc/php-fpm.d/zz-docker.conf
+    networks:
+      - qemu_network
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT}:80"
+      - "${APP_SSL_PORT}:443"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    networks:
+      - qemu_network
+    depends_on:
+      - app
+
+  db:
+    image: mariadb:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_db
+    restart: unless-stopped
+    platform: linux/riscv64
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ${COMPOSE_PROJECT_NAME}_dbdata:/var/lib/mysql
+    networks:
+      - qemu_network
+    ports:
+      - "${DB_EXTERNAL_PORT}:3306"
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - qemu_network
+    depends_on:
+      - db
+    entrypoint: /bin/sh
+    command: -c "while true; do php /var/www/artisan schedule:run --verbose --no-interaction; sleep 60; done"
+
+networks:
+  qemu_network:
+    driver: bridge
+
+volumes:
+  qemu_dbdata:

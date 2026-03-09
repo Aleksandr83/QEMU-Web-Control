@@ -1,0 +1,15 @@
+[Unit]
+Description=QEMU Web Control - Autostart Virtual Machines
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/user/Dev/Projects/web/QemuWebControl
+ExecStart=/usr/bin/docker compose exec -T app php artisan vm:autostart
+User=user
+Group=user
+
+[Install]
+WantedBy=multi-user.target

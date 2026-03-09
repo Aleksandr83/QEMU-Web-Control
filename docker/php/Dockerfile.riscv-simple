@@ -1,0 +1,47 @@
+FROM php:8.3-fpm
+
+ARG QEMU_APT_PACKAGES="qemu-utils"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libicu-dev \
+    zip \
+    unzip \
+    wget \
+    ca-certificates \
+    ${QEMU_APT_PACKAGES} \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd intl
+
+# Install Node.js from Debian repositories (simpler for RISC-V)
+# Note: This may be an older version, but it's stable
+RUN apt-get update && \
+    apt-get install -y nodejs npm && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js installation
+RUN node --version || echo "Node.js not available" && \
+    npm --version || echo "npm not available"
+
+# Get latest Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www
+
+# Copy PHP-FPM configuration
+COPY docker/php/zz-docker.conf /usr/local/etc/php-fpm.d/zz-docker.conf
+
+# Expose port 9000
+EXPOSE 9000
+
+CMD ["php-fpm"]

@@ -1,0 +1,8 @@
+# Опционально: для теста websockify напрямую (минуя nginx)
+# Запуск: docker compose -f docker-compose.yml -f docker-compose.websockify-debug.yml up -d
+# Тест: ws://IP:26080/?token=ТОКЕН
+
+services:
+  app:
+    ports:
+      - "26080:6080"

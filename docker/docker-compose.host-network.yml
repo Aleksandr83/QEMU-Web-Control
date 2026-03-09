@@ -1,0 +1,65 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.3}
+        QEMU_APT_PACKAGES: ${QEMU_APT_PACKAGES:-qemu-utils}
+    container_name: ${COMPOSE_PROJECT_NAME}_app
+    restart: unless-stopped
+    network_mode: "host"
+    user: "0:0"
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/etc/php-app/local.ini
+      - /etc/QemuWebControl:/etc/QemuWebControl:ro
+      - /var/qemu/VM:/var/qemu/VM
+      - /var/qemu/qmp:/var/qemu/qmp
+      - ${QEMU_ISO_VOLUME:-/var/lib/qemu/iso}:/var/lib/qemu/iso:ro
+      - ${QEMU_ISO_UPLOAD_STAGING:-/var/lib/qemu/iso-staging}:/var/lib/qemu/iso-staging
+      - /srv/iso:/srv/iso:ro
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_nginx
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.3}
+        QEMU_APT_PACKAGES: ${QEMU_APT_PACKAGES:-qemu-utils}
+    container_name: ${COMPOSE_PROJECT_NAME}_scheduler
+    restart: unless-stopped
+    network_mode: "host"
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/etc/php-app/local.ini
+      - /etc/QemuWebControl:/etc/QemuWebControl:ro
+      - /var/qemu/VM:/var/qemu/VM
+      - /var/qemu/qmp:/var/qemu/qmp
+      - ${QEMU_ISO_VOLUME:-/var/lib/qemu/iso}:/var/lib/qemu/iso:ro
+      - ${QEMU_ISO_UPLOAD_STAGING:-/var/lib/qemu/iso-staging}:/var/lib/qemu/iso-staging
+      - /srv/iso:/srv/iso:ro
+    entrypoint: /bin/sh
+    command: -c "while true; do php /var/www/artisan schedule:run --verbose --no-interaction; sleep 60; done"

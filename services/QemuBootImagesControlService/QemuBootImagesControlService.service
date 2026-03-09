@@ -1,0 +1,12 @@
+[Unit]
+Description=QEMU Boot Images Control Service (ISO delete via gRPC/HTTP)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/QemuBootImagesControlService /etc/QemuWebControl/boot-media.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

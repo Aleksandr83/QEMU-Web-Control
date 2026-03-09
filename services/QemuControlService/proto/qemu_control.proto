@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package qemu.control;
+
+service QemuControl {
+  rpc StartVm(StartVmRequest) returns (StartVmResponse);
+  rpc StopVm(StopVmRequest) returns (StopVmResponse);
+  rpc GetVmStatus(GetVmStatusRequest) returns (GetVmStatusResponse);
+  rpc CapturePreview(CapturePreviewRequest) returns (CapturePreviewResponse);
+}
+
+message StartVmRequest {
+  string vm_id = 1;
+  string architecture = 2;
+  int32 cpu_cores = 3;
+  int32 ram_mb = 4;
+  string primary_disk_path = 5;
+  repeated string additional_disks = 6;
+  string iso_path = 7;
+  string network_type = 8;
+  int32 vnc_port = 9;
+  string bridge_name = 10;
+  string mac_address = 11;
+  string qmp_socket_path = 12;
+}
+
+message StartVmResponse {
+  bool success = 1;
+  int32 pid = 2;
+  string error_message = 3;
+}
+
+message StopVmRequest {
+  string vm_id = 1;
+  int32 pid = 2;
+}
+
+message StopVmResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message GetVmStatusRequest {
+  string vm_id = 1;
+}
+
+message GetVmStatusResponse {
+  bool running = 1;
+  int32 pid = 2;
+  string error_message = 3;
+}
+
+message CapturePreviewRequest {
+  string vm_id = 1;
+  string uuid = 2;
+}
+
+message CapturePreviewResponse {
+  bool success = 1;
+  bytes image_data = 2;
+  string error_message = 3;
+}

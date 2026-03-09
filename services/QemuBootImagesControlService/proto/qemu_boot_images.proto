@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package qemu.boot_images;
+
+service QemuBootImagesControl {
+  rpc DeleteIso(DeleteIsoRequest) returns (DeleteIsoResponse);
+  rpc MoveIso(MoveIsoRequest) returns (MoveIsoResponse);
+  rpc GetProgressOperation(GetProgressOperationRequest) returns (GetProgressOperationResponse);
+  rpc CancelMoveOperation(CancelMoveOperationRequest) returns (CancelMoveOperationResponse);
+}
+
+message DeleteIsoRequest {
+  repeated string paths = 1;
+}
+
+message DeleteIsoResult {
+  string path = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+message DeleteIsoResponse {
+  repeated DeleteIsoResult results = 1;
+}
+
+message MoveIsoRequest {
+  string operation_id = 1;
+  string source_filename = 2;
+  string destination_directory = 3;
+}
+
+message MoveIsoResponse {
+  string error_message = 1;
+}
+
+message GetProgressOperationRequest {
+  string operation_id = 1;
+}
+
+message GetProgressOperationResponse {
+  string status = 1;
+  int32 progress = 2;
+  string error_message = 3;
+}
+
+message CancelMoveOperationRequest {
+  string operation_id = 1;
+}
+
+message CancelMoveOperationResponse {
+  bool cancelled = 1;
+}
