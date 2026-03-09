@@ -603,6 +603,23 @@ select_qemu_architectures() {
     done
 
     DEFAULT_QEMU_ARCH="${SELECTED_QEMU_ARCHES[0]}"
+
+    local arch
+    for arch in "${SELECTED_QEMU_ARCHES[@]}"; do
+        if [[ "$arch" == "arm" || "$arch" == "aarch64" ]]; then
+            if ! printf '%s\n' "${SELECTED_QEMU_PACKAGES[@]}" | grep -qx 'qemu-efi-aarch64'; then
+                SELECTED_QEMU_PACKAGES+=("qemu-efi-aarch64")
+                install_log "Added qemu-efi-aarch64 (ARM UEFI firmware) for arch=${arch}"
+            fi
+        fi
+        if [[ "$arch" == "riscv64" ]]; then
+            if ! printf '%s\n' "${SELECTED_QEMU_PACKAGES[@]}" | grep -qx 'qemu-efi-riscv64'; then
+                SELECTED_QEMU_PACKAGES+=("qemu-efi-riscv64")
+                install_log "Added qemu-efi-riscv64 (RISC-V EDK2 UEFI firmware) for arch=${arch}"
+            fi
+        fi
+    done
+
     install_log "Selected QEMU arches: ${SELECTED_QEMU_ARCHES[*]}"
     install_log "Selected QEMU packages: ${SELECTED_QEMU_PACKAGES[*]}"
 }

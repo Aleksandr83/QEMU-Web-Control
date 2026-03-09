@@ -113,6 +113,41 @@ if [ ! -r /dev/kvm ] 2>/dev/null; then
     install_log "KVM not available (/dev/kvm), using TCG software emulation (USE_KVM=false)"
 fi
 
+aavmf_code_path=""
+for candidate in \
+    "/usr/share/AAVMF/AAVMF_CODE.fd" \
+    "/usr/share/qemu-efi-aarch64/QEMU_EFI.fd" \
+    "/usr/share/edk2/aarch64/QEMU_EFI.fd"; do
+    if [ -f "$candidate" ]; then
+        aavmf_code_path="$candidate"
+        install_log "AAVMF firmware found: $candidate"
+        break
+    fi
+done
+aavmf_line=""
+if [ -n "$aavmf_code_path" ]; then
+    aavmf_line="AAVMF_CODE_PATH=${aavmf_code_path}"
+else
+    install_log "AAVMF firmware not found (ARM VMs will not boot from ISO)"
+fi
+
+riscv_bios_path=""
+for candidate in \
+    "/usr/share/qemu-efi-riscv64/RISCV_VIRT_CODE.fd" \
+    "/usr/share/edk2/riscv64/QEMU_EFI.fd"; do
+    if [ -f "$candidate" ]; then
+        riscv_bios_path="$candidate"
+        install_log "RISC-V EDK2 firmware found: $candidate"
+        break
+    fi
+done
+riscv_bios_line=""
+if [ -n "$riscv_bios_path" ]; then
+    riscv_bios_line="RISCV_BIOS_PATH=${riscv_bios_path}"
+else
+    install_log "RISC-V EDK2 firmware not found (RISC-V VMs will not show display)"
+fi
+
 qemu_control_conf="/etc/QemuWebControl/qemu-control.conf"
 vnc_token_file="${SCRIPT_DIR}/storage/app/vnc-tokens.txt"
 ssl_cert="${SCRIPT_DIR}/docker/nginx/ssl/server.crt"
@@ -124,8 +159,8 @@ if [ -f "$ssl_cert" ] && [ -f "$ssl_key" ]; then
     vnc_ssl_key_line="VNC_SSL_KEY=${ssl_key}"
     install_log "VNC SSL: using $ssl_cert"
 fi
-printf 'LISTEN_ADDRESS=0.0.0.0\nPORT=50053\nHTTP_PORT=50054\nLOG_PATH=/var/log/QemuControlService.log\nQEMU_BIN_PATH=%s\nVM_STORAGE=%s\nQMP_SOCKET_DIR=%s\nUSE_KVM=%s\nVNC_BIND_ADDRESS=0.0.0.0\nVNC_TOKEN_FILE=%s\nVNC_WS_PORT=50055\n%s\n%s\n' \
-    "$qemu_bin" "$vm_storage" "$qmp_socket_dir" "$use_kvm" "$vnc_token_file" "$vnc_ssl_cert_line" "$vnc_ssl_key_line" \
+printf 'LISTEN_ADDRESS=0.0.0.0\nPORT=50053\nHTTP_PORT=50054\nLOG_PATH=/var/log/QemuControlService.log\nQEMU_BIN_PATH=%s\nVM_STORAGE=%s\nQMP_SOCKET_DIR=%s\nUSE_KVM=%s\nVNC_BIND_ADDRESS=0.0.0.0\nVNC_TOKEN_FILE=%s\nVNC_WS_PORT=50055\n%s\n%s\n%s\n%s\n' \
+    "$qemu_bin" "$vm_storage" "$qmp_socket_dir" "$use_kvm" "$vnc_token_file" "$vnc_ssl_cert_line" "$vnc_ssl_key_line" "$aavmf_line" "$riscv_bios_line" \
     | sudo tee "$qemu_control_conf" > /dev/null
 sudo chmod 644 "$qemu_control_conf"
 install_log "Created $qemu_control_conf"

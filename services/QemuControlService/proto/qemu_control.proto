@@ -22,6 +22,7 @@ message StartVmRequest {
   string bridge_name = 10;
   string mac_address = 11;
   string qmp_socket_path = 12;
+  bool enable_kvm = 13;
 }
 
 message StartVmResponse {

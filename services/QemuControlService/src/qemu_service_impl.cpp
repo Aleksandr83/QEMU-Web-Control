@@ -285,20 +285,69 @@ bool QemuServiceImpl::isRunning(int pid) const {
     return kill(pid, 0) == 0;
 }
 
-std::string QemuServiceImpl::buildQemuCommand(const StartVmRequest* request) const {
-    std::ostringstream oss;
-    oss << config_->qemu_bin_path();
-    if (config_->use_kvm()) {
-        oss << " -enable-kvm";
-    } else {
-        oss << " -accel tcg";
+static std::string qemuBinForArch(const std::string& default_bin, const std::string& arch) {
+    if (arch.empty() || arch == "x86_64") {
+        return default_bin;
     }
+    size_t last_slash = default_bin.rfind('/');
+    std::string dir = (last_slash != std::string::npos) ? default_bin.substr(0, last_slash + 1) : "";
+    return dir + "qemu-system-" + arch;
+}
+
+static bool isVirtMachineArch(const std::string& arch) {
+    return arch == "aarch64" || arch == "arm" || arch == "riscv64";
+}
+
+static bool isArmArch(const std::string& arch) {
+    return arch == "aarch64" || arch == "arm";
+}
+
+std::string QemuServiceImpl::buildQemuCommand(const StartVmRequest* request) const {
+    const std::string arch = request->architecture();
+    std::ostringstream oss;
+
+    oss << qemuBinForArch(config_->qemu_bin_path(), arch);
+
+    if (isVirtMachineArch(arch)) {
+        oss << " -machine virt";
+        if (arch == "aarch64") {
+            oss << " -cpu cortex-a57";
+        } else if (arch == "arm") {
+            oss << " -cpu cortex-a15";
+        }
+        oss << " -accel tcg";
+        oss << " -device ramfb -device usb-ehci -device usb-kbd -device usb-mouse";
+        if (isArmArch(arch)) {
+            const std::string& aavmf = config_->aavmf_code_path();
+            if (!aavmf.empty() && std::filesystem::exists(aavmf)) {
+                oss << " -bios '" << aavmf << "'";
+            } else {
+                logger_->warn("buildQemuCommand: AAVMF not found at " + aavmf + " for arch=" + arch);
+            }
+        } else {
+            const std::string& riscv_bios = config_->riscv_bios_path();
+            if (!riscv_bios.empty() && std::filesystem::exists(riscv_bios)) {
+                oss << " -drive if=pflash,format=raw,readonly=on,file='" << riscv_bios << "'";
+            } else {
+                logger_->warn("buildQemuCommand: RISC-V EDK2 firmware not found at " + riscv_bios + ", falling back to -bios default");
+                oss << " -bios default";
+            }
+        }
+    } else {
+        if (request->enable_kvm() && config_->use_kvm()) {
+            oss << " -enable-kvm";
+        } else {
+            oss << " -accel tcg";
+        }
+    }
+
     oss << " -m " << request->ram_mb()
         << " -smp " << request->cpu_cores()
         << " -drive file='" << request->primary_disk_path() << "',format=qcow2,if=virtio";
     for (int i = 0; i < request->additional_disks_size(); ++i) {
         oss << " -drive file='" << request->additional_disks(i) << "',format=qcow2,if=virtio";
     }
+
     std::string pidfile;
     if (!request->qmp_socket_path().empty()) {
         oss << " -qmp unix:" << request->qmp_socket_path() << ",server=on,wait=off";
@@ -311,12 +360,21 @@ std::string QemuServiceImpl::buildQemuCommand(const StartVmRequest* request) con
         }
         oss << " -pidfile " << pidfile;
     }
+
     if (request->vnc_port() > 0) {
         oss << " -vnc " << config_->vnc_bind_address() << ":" << (request->vnc_port() - 5900);
     }
+
     if (!request->iso_path().empty()) {
-        oss << " -cdrom '" << request->iso_path() << "' -boot order=d";
+        if (isVirtMachineArch(arch)) {
+            oss << " -drive file='" << request->iso_path() << "',media=cdrom,if=none,id=cdrom0,readonly=on"
+                << " -device virtio-scsi-pci"
+                << " -device scsi-cd,drive=cdrom0,bootindex=0";
+        } else {
+            oss << " -cdrom '" << request->iso_path() << "' -boot order=d";
+        }
     }
+
     if (!request->mac_address().empty()) {
         oss << " -net nic,macaddr=" << request->mac_address();
     }

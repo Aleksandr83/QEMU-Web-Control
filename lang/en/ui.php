@@ -144,6 +144,8 @@ return [
         'autostart_desc' => 'VM will start when the system starts',
         'use_audio' => 'Use audio',
         'use_audio_desc' => 'Enable sound in the virtual machine (requires PipeWire on host)',
+        'enable_kvm' => 'Enable hardware virtualization (-enable-kvm)',
+        'enable_kvm_desc' => 'Use KVM for acceleration. Disable for ARM/RISC-V on x86 host or nested virtualization',
         'start' => 'Start',
         'stop' => 'Stop',
         'running' => 'Running',

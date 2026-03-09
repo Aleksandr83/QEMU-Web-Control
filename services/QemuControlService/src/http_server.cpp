@@ -51,6 +51,7 @@ void HttpServer::run() {
             pb_req.set_vnc_port(j.value("vnc_port", 0));
             pb_req.set_mac_address(j.value("mac_address", ""));
             pb_req.set_qmp_socket_path(j.value("qmp_socket_path", ""));
+            pb_req.set_enable_kvm(j.value("enable_kvm", false));
             if (j.contains("additional_disks") && j["additional_disks"].is_array()) {
                 for (const auto& d : j["additional_disks"]) {
                     if (d.is_string()) {

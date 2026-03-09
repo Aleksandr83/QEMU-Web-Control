@@ -311,6 +311,15 @@
                     <span class="ml-2 text-xs text-slate-500">{{ __('ui.vm.use_audio_desc') }}</span>
                 </div>
 
+                <div class="flex items-center">
+                    <input id="enable_kvm" type="checkbox" name="enable_kvm" value="1" {{ old('enable_kvm', $vm->enable_kvm) ? 'checked' : '' }}
+                           class="rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500 w-4 h-4">
+                    <label for="enable_kvm" class="ml-2 text-sm text-slate-300">
+                        {{ __('ui.vm.enable_kvm') }}
+                    </label>
+                    <span class="ml-2 text-xs text-slate-500">{{ __('ui.vm.enable_kvm_desc') }}</span>
+                </div>
+
                 @if(($users ?? null) !== null && ($groups ?? null) !== null)
                 <div class="space-y-4 p-4 rounded-lg bg-slate-800/50 border border-slate-600">
                     <h2 class="text-sm font-semibold text-slate-200">{{ __('ui.vm.sharing') }}</h2>

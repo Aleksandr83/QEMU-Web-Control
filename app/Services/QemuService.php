@@ -166,6 +166,7 @@ class QemuService
             'primary_disk_path' => $primary['path'],
             'additional_disks' => array_slice(array_column($disks, 'path'), 1),
             'iso_path' => $vm->iso_path ?? '',
+            'enable_kvm' => (bool) ($vm->enable_kvm ?? true),
             'network_type' => $vm->network_type ?? 'user',
             'vnc_port' => $vm->vnc_port ?? 0,
             'mac_address' => $vm->mac_address ?? '',

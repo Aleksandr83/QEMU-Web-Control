@@ -95,6 +95,7 @@ class VirtualMachineController extends Controller
             'vnc_port' => ['nullable', 'integer', 'min:5900', 'max:5999', Rule::unique('virtual_machines', 'vnc_port')],
             'autostart' => 'nullable|boolean',
             'use_audio' => 'nullable|boolean',
+            'enable_kvm' => 'nullable|boolean',
         ]);
 
         $vmId = $validated['vm_id'];
@@ -118,6 +119,7 @@ class VirtualMachineController extends Controller
             'vnc_port' => $validated['vnc_port'] ?? null,
             'autostart' => $request->boolean('autostart'),
             'use_audio' => $request->boolean('use_audio'),
+            'enable_kvm' => $request->boolean('enable_kvm'),
         ];
 
         $vm = VirtualMachine::create($vmPayload);
@@ -207,6 +209,7 @@ class VirtualMachineController extends Controller
             ],
             'autostart' => 'nullable|boolean',
             'use_audio' => 'nullable|boolean',
+            'enable_kvm' => 'nullable|boolean',
             'shared_with_all' => 'nullable|boolean',
             'shared_user_ids' => 'nullable|array',
             'shared_user_ids.*' => 'exists:users,id',
@@ -227,6 +230,7 @@ class VirtualMachineController extends Controller
             'vnc_port' => $validated['vnc_port'] ?? null,
             'autostart' => $request->boolean('autostart'),
             'use_audio' => $request->boolean('use_audio'),
+            'enable_kvm' => $request->boolean('enable_kvm'),
             'shared_with_all' => $request->boolean('shared_with_all'),
         ];
         $vm->update($updatePayload);
