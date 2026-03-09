@@ -1754,15 +1754,24 @@ generate_ssl() {
 
     mkdir -p docker/nginx/ssl
 
+    local san="DNS:localhost,IP:127.0.0.1"
+    local hostname_val
+    hostname_val=$(hostname 2>/dev/null || true)
+    [ -n "$hostname_val" ] && [ "$hostname_val" != "localhost" ] && san="${san},DNS:${hostname_val}"
+    while IFS= read -r ip; do
+        [ -n "$ip" ] && san="${san},IP:${ip}"
+    done < <(ip -4 addr show scope global 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]}' | sort -u || true)
+    install_log "SSL SAN: ${san}"
+
     local ssl_out
-    if ! ssl_out=$(openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    if ! ssl_out=$(openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
         -keyout docker/nginx/ssl/server.key \
         -out docker/nginx/ssl/server.crt \
         -subj "/C=RU/ST=Moscow/L=Moscow/O=QEMU Web Control/CN=localhost" \
-        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>&1); then
-        install_log "openssl error output: $ssl_out"
+        -addext "subjectAltName=${san}" 2>&1); then
+        install_log "openssl error: $ssl_out"
         install_log "Retrying without -addext (older OpenSSL fallback)..."
-        if ! ssl_out=$(openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        if ! ssl_out=$(openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
             -keyout docker/nginx/ssl/server.key \
             -out docker/nginx/ssl/server.crt \
             -subj "/C=RU/ST=Moscow/L=Moscow/O=QEMU Web Control/CN=localhost" 2>&1); then
@@ -1771,11 +1780,11 @@ generate_ssl() {
         fi
         install_log "SSL certificate generated (without SAN, older OpenSSL)"
     else
-        install_log "SSL certificate generated with SAN"
+        install_log "SSL certificate generated with SAN: ${san}"
     fi
 
     chmod 600 docker/nginx/ssl/server.key
-    install_log "SSL: docker/nginx/ssl/server.{crt,key} — openssl $(openssl version 2>/dev/null)"
+    install_log "SSL: docker/nginx/ssl/server.{crt,key} — $(openssl version 2>/dev/null)"
     print_success "${MESSAGES[ssl_generated]}"
 }
 
@@ -2551,6 +2560,8 @@ main() {
     check_apache_port_conflict
     install_log "--- setup_qemu_dirs"
     setup_qemu_dirs
+    install_log "--- generate_ssl"
+    generate_ssl
     install_log "--- setup_boot_images_service"
     setup_boot_images_service
     install_log "--- setup_qemu_control_service"
@@ -2559,8 +2570,6 @@ main() {
     configure_database
     install_log "--- configure_db_firewall"
     configure_db_firewall
-    install_log "--- generate_ssl"
-    generate_ssl
     install_log "--- run_installation"
     run_installation
     install_log "--- check_apache"
