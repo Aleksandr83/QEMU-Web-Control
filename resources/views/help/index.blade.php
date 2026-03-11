@@ -6,7 +6,12 @@
         </div>
 
         <div class="card">
-            <h2 class="text-lg font-semibold text-white mb-4">{{ __('ui.help.documentation') }}</h2>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-white">{{ __('ui.help.documentation') }}</h2>
+                @if($version)
+                    <span class="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">v{{ $version }}</span>
+                @endif
+            </div>
             <ul class="space-y-3">
                 @foreach($docs as $key => [$file, $label])
                     <li>

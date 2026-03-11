@@ -34,7 +34,30 @@ class HelpController extends Controller
             'boot_media' => ['BOOT-MEDIA.' . $lang . '.md', __('ui.help.boot_media')],
         ];
 
-        return view('help.index', compact('docs', 'lang'));
+        $version = $this->resolveVersion($lang);
+
+        return view('help.index', compact('docs', 'lang', 'version'));
+    }
+
+    private function resolveVersion(string $lang): string
+    {
+        $changelogPath = base_path('docs/' . $lang . '/CHANGELOG.' . $lang . '.md');
+        if (!is_readable($changelogPath)) {
+            return '';
+        }
+
+        $handle = fopen($changelogPath, 'r');
+        while ($handle && ($line = fgets($handle)) !== false) {
+            if (preg_match('/^##\s+\[([^\]]+)\]/', $line, $matches)) {
+                fclose($handle);
+                return $matches[1];
+            }
+        }
+        if ($handle) {
+            fclose($handle);
+        }
+
+        return '';
     }
 
     public function doc(string $lang, string $file): View

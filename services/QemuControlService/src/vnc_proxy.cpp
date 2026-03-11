@@ -60,9 +60,11 @@ void VncProxy::run() {
     std::string port_str = std::to_string(port);
     std::string listen_addr = "0.0.0.0:" + port_str;
 
-    std::string cert = config_->vnc_ssl_cert();
-    std::string key  = config_->vnc_ssl_key();
-    bool use_ssl = !cert.empty() && !key.empty();
+    std::string cert    = config_->vnc_ssl_cert();
+    std::string key     = config_->vnc_ssl_key();
+    std::string web_dir = config_->vnc_web_dir();
+    bool use_ssl        = !cert.empty() && !key.empty();
+    bool use_web        = !web_dir.empty();
 
     websockify_pid_ = fork();
     if (websockify_pid_ < 0) {
@@ -79,7 +81,23 @@ void VncProxy::run() {
             dup2(devnull, STDERR_FILENO);
             if (devnull > 2) close(devnull);
         }
-        if (use_ssl) {
+        if (use_ssl && use_web) {
+            if (execlp("websockify", "websockify", "-v",
+                       "--token-plugin", "TokenFile",
+                       "--token-source", token_file.c_str(),
+                       "--cert", cert.c_str(),
+                       "--key", key.c_str(),
+                       "--web", web_dir.c_str(),
+                       listen_addr.c_str(), nullptr) < 0) {
+                execlp("python3", "python3", "-m", "websockify", "-v",
+                       "--token-plugin", "TokenFile",
+                       "--token-source", token_file.c_str(),
+                       "--cert", cert.c_str(),
+                       "--key", key.c_str(),
+                       "--web", web_dir.c_str(),
+                       listen_addr.c_str(), nullptr);
+            }
+        } else if (use_ssl) {
             if (execlp("websockify", "websockify", "-v",
                        "--token-plugin", "TokenFile",
                        "--token-source", token_file.c_str(),
@@ -91,6 +109,18 @@ void VncProxy::run() {
                        "--token-source", token_file.c_str(),
                        "--cert", cert.c_str(),
                        "--key", key.c_str(),
+                       listen_addr.c_str(), nullptr);
+            }
+        } else if (use_web) {
+            if (execlp("websockify", "websockify", "-v",
+                       "--token-plugin", "TokenFile",
+                       "--token-source", token_file.c_str(),
+                       "--web", web_dir.c_str(),
+                       listen_addr.c_str(), nullptr) < 0) {
+                execlp("python3", "python3", "-m", "websockify", "-v",
+                       "--token-plugin", "TokenFile",
+                       "--token-source", token_file.c_str(),
+                       "--web", web_dir.c_str(),
                        listen_addr.c_str(), nullptr);
             }
         } else {

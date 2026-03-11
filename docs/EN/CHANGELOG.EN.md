@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0] - 2026-02-06
+## [0.0.2] - 2026-02-06
 
 ### ⚠️ Important Note
 
@@ -70,7 +70,7 @@ Installing on RISC-V (Orange Pi RV2) is an **adventure**! Not everything will go
 - ❌ Missing Node.js in container on RISC-V
 - ❌ Incompatibility with different docker-compose versions
 
-## [1.0.0] - 2026-02-06
+## [0.0.1] - 2026-02-06
 
 ### Added
 - ✅ Initial QEMU Web Control release
@@ -97,7 +97,7 @@ Installing on RISC-V (Orange Pi RV2) is an **adventure**! Not everything will go
 
 ## Migration
 
-### From 1.0.0 to 1.1.0
+### From 0.0.1 to 0.0.2
 
 1. Update project files
 2. Run new migration:
@@ -141,8 +141,6 @@ docker compose up -d
 - [ ] VM cloning
 - [ ] VM import/export
 - [ ] REST API for management
-- [ ] Support for other hypervisors (VirtualBox, VMware)
-
 ---
 
 ## Acknowledgments

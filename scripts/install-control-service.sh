@@ -148,6 +148,33 @@ else
     install_log "RISC-V EDK2 firmware not found (RISC-V VMs will not show display)"
 fi
 
+vnc_web_dir="/etc/QemuWebControl/vnc-web"
+sudo mkdir -p "$vnc_web_dir"
+sudo tee "$vnc_web_dir/index.html" > /dev/null <<'HTML'
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>QemuWebControl — VNC</title>
+  <style>
+    body { font-family: sans-serif; display: flex; align-items: center; justify-content: center;
+           height: 100vh; margin: 0; background: #0f172a; color: #94a3b8; }
+    .box { text-align: center; padding: 2rem; border: 1px solid #334155; border-radius: 0.5rem; }
+    h1 { color: #22d3ee; margin-bottom: 0.5rem; }
+    p { margin: 0; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>QemuWebControl — VNC</h1>
+    <p>Certificate accepted. You can close this tab and return to the application.</p>
+  </div>
+</body>
+</html>
+HTML
+sudo chmod 644 "$vnc_web_dir/index.html"
+install_log "Created VNC web dir: $vnc_web_dir/index.html"
+
 qemu_control_conf="/etc/QemuWebControl/qemu-control.conf"
 vnc_token_file="${SCRIPT_DIR}/storage/app/vnc-tokens.txt"
 ssl_cert="${SCRIPT_DIR}/docker/nginx/ssl/server.crt"
@@ -159,8 +186,8 @@ if [ -f "$ssl_cert" ] && [ -f "$ssl_key" ]; then
     vnc_ssl_key_line="VNC_SSL_KEY=${ssl_key}"
     install_log "VNC SSL: using $ssl_cert"
 fi
-printf 'LISTEN_ADDRESS=0.0.0.0\nPORT=50053\nHTTP_PORT=50054\nLOG_PATH=/var/log/QemuControlService.log\nQEMU_BIN_PATH=%s\nVM_STORAGE=%s\nQMP_SOCKET_DIR=%s\nUSE_KVM=%s\nVNC_BIND_ADDRESS=0.0.0.0\nVNC_TOKEN_FILE=%s\nVNC_WS_PORT=50055\n%s\n%s\n%s\n%s\n' \
-    "$qemu_bin" "$vm_storage" "$qmp_socket_dir" "$use_kvm" "$vnc_token_file" "$vnc_ssl_cert_line" "$vnc_ssl_key_line" "$aavmf_line" "$riscv_bios_line" \
+printf 'LISTEN_ADDRESS=0.0.0.0\nPORT=50053\nHTTP_PORT=50054\nLOG_PATH=/var/log/QemuControlService.log\nQEMU_BIN_PATH=%s\nVM_STORAGE=%s\nQMP_SOCKET_DIR=%s\nUSE_KVM=%s\nVNC_BIND_ADDRESS=0.0.0.0\nVNC_TOKEN_FILE=%s\nVNC_WS_PORT=50055\nVNC_WEB_DIR=%s\n%s\n%s\n%s\n%s\n' \
+    "$qemu_bin" "$vm_storage" "$qmp_socket_dir" "$use_kvm" "$vnc_token_file" "$vnc_web_dir" "$vnc_ssl_cert_line" "$vnc_ssl_key_line" "$aavmf_line" "$riscv_bios_line" \
     | sudo tee "$qemu_control_conf" > /dev/null
 sudo chmod 644 "$qemu_control_conf"
 install_log "Created $qemu_control_conf"

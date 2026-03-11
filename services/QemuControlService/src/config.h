@@ -24,6 +24,7 @@ public:
     uint16_t vnc_ws_port() const { return vnc_ws_port_; }
     std::string vnc_ssl_cert() const { return vnc_ssl_cert_; }
     std::string vnc_ssl_key() const { return vnc_ssl_key_; }
+    std::string vnc_web_dir() const { return vnc_web_dir_; }
     std::string aavmf_code_path() const { return aavmf_code_path_; }
     std::string riscv_bios_path() const { return riscv_bios_path_; }
 
@@ -44,6 +45,7 @@ private:
     uint16_t vnc_ws_port_ = 50055;
     std::string vnc_ssl_cert_;
     std::string vnc_ssl_key_;
+    std::string vnc_web_dir_ = "/etc/QemuWebControl/vnc-web";
     std::string aavmf_code_path_ = "/usr/share/AAVMF/AAVMF_CODE.fd";
     std::string riscv_bios_path_ = "/usr/share/qemu-efi-riscv64/RISCV_VIRT_CODE.fd";
 };

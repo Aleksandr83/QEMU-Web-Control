@@ -70,6 +70,10 @@ void Config::load(const std::string& config_path) {
             vnc_ssl_cert_ = val;
         } else if (key == "VNC_SSL_KEY") {
             vnc_ssl_key_ = val;
+        } else if (key == "VNC_WEB_DIR") {
+            if (!val.empty()) {
+                vnc_web_dir_ = val;
+            }
         } else if (key == "AAVMF_CODE_PATH") {
             if (!val.empty()) {
                 aavmf_code_path_ = val;

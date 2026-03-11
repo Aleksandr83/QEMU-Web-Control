@@ -17,7 +17,10 @@
         </div>
         @if(!empty(env('VNC_SSL_CERT')))
         <div id="vnc-cert-warning" class="hidden mb-3 p-3 rounded-lg bg-blue-900/50 border border-blue-600 text-blue-200 text-sm">
-            {!! __('ui.vm.console_cert_warning', ['url' => '<a id="vnc-cert-url" href="#" target="_blank" class="underline font-mono"></a>']) !!}
+            <div class="flex items-start justify-between gap-2">
+                <span>{!! __('ui.vm.console_cert_warning', ['url' => '<a id="vnc-cert-url" href="#" target="_blank" class="underline font-mono"></a>']) !!}</span>
+                <button onclick="document.getElementById('vnc-cert-warning').style.display='none'" class="shrink-0 text-blue-300 hover:text-white leading-none text-lg mt-0.5" aria-label="Close">&times;</button>
+            </div>
         </div>
         @endif
         <div class="card p-0 overflow-hidden">

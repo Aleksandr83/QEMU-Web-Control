@@ -166,6 +166,23 @@ void HttpServer::run() {
         res.set_content("{\"status\":\"ok\"}", "application/json");
     });
 
+    server_->Get("/", [](const httplib::Request&, httplib::Response& res) {
+        res.set_header("Content-Type", "text/html; charset=utf-8");
+        res.set_content(
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<title>QemuControlService</title>"
+            "<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;"
+            "height:100vh;margin:0;background:#0f172a;color:#94a3b8;}"
+            ".box{text-align:center;padding:2rem;border:1px solid #334155;border-radius:0.5rem;}"
+            "h1{color:#22d3ee;margin-bottom:0.5rem;}p{margin:0;font-size:0.9rem;}"
+            "</style></head><body><div class='box'>"
+            "<h1>QemuControlService</h1>"
+            "<p>Certificate accepted. You can close this tab and return to the application.</p>"
+            "</div></body></html>",
+            "text/html"
+        );
+    });
+
     std::string addr = host_ + ":" + std::to_string(port_);
     Logger::instance().info("HTTP server listening on " + addr);
     server_->listen(host_.c_str(), port_);
