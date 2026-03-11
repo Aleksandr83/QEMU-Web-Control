@@ -126,6 +126,35 @@ void HttpServer::run() {
         res.set_content(j.dump(), "application/json");
     });
 
+    server_->Post("/send-text", [this](const httplib::Request& req, httplib::Response& res) {
+        res.set_header("Content-Type", "application/json");
+        std::string vm_id, uuid, text, keyboard_layout;
+        try {
+            auto j = nlohmann::json::parse(req.body);
+            vm_id = j.value("vm_id", "");
+            uuid = j.value("uuid", "");
+            text = j.value("text", "");
+            keyboard_layout = j.value("keyboard_layout", "");
+        } catch (const nlohmann::json::exception&) {
+            res.status = 400;
+            res.set_content("{\"success\":false,\"error_message\":\"Invalid JSON\"}", "application/json");
+            return;
+        }
+        if (vm_id.empty()) {
+            res.status = 400;
+            res.set_content("{\"success\":false,\"error_message\":\"vm_id required\"}", "application/json");
+            return;
+        }
+        std::string err;
+        bool ok = service_->SendTextToVm(vm_id, uuid, text, keyboard_layout, &err);
+        nlohmann::json j;
+        j["success"] = ok;
+        if (!ok) j["error_message"] = err;
+        res.status = 200;
+        res.set_content(j.dump(), "application/json");
+        Logger::instance().info("POST /send-text vm_id=" + vm_id + " -> " + (ok ? "ok" : "err=" + err));
+    });
+
     server_->Post("/preview", [this](const httplib::Request& req, httplib::Response& res) {
         CapturePreviewRequest pb_req;
         CapturePreviewResponse pb_res;

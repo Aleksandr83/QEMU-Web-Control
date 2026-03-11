@@ -169,6 +169,7 @@ return [
         'paste_clipboard' => 'Paste from clipboard',
         'paste_clipboard_placeholder' => 'Paste or type text here, then click Send to type it into the VM...',
         'paste_clipboard_send' => 'Send to VM',
+        'paste_tty_ru' => 'TTY with Russian layout (loadkeys ru)',
         'edit_unauthorized' => 'Access denied. You do not have permission to edit or delete this virtual machine.',
         'edit_read_only' => 'View only. Delete is available.',
         'sharing' => 'User access',

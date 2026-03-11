@@ -361,6 +361,21 @@ class VirtualMachineController extends Controller
         ]);
     }
 
+    public function sendText(Request $request, VirtualMachine $vm): JsonResponse
+    {
+        $this->authorize('view', $vm);
+        $validated = $request->validate([
+            'text' => 'required|string|max:100000',
+            'keyboard_layout' => 'nullable|string',
+        ]);
+        if (!$vm->isRunning()) {
+            return response()->json(['success' => false, 'error_message' => __('ui.vm.console_unavailable')], 400);
+        }
+        $layout = ($validated['keyboard_layout'] ?? '') === 'tty_ru' ? 'tty_ru' : '';
+        $result = $this->qemuService->sendTextToVm($vm, $validated['text'], $layout);
+        return response()->json($result);
+    }
+
     private function resolveOsType(Request $request, ?string $osType): ?string
     {
         if ($osType === 'other') {

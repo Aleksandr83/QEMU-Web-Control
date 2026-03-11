@@ -36,6 +36,7 @@ Route::middleware(['auth', \App\Http\Middleware\SetLocaleMiddleware::class])->gr
     Route::resource('vms', VirtualMachineController::class);
     Route::get('vms/{vm}/preview', [VirtualMachineController::class, 'preview'])->name('vms.preview');
     Route::get('vms/{vm}/console', [VirtualMachineController::class, 'console'])->name('vms.console');
+    Route::post('vms/{vm}/send-text', [VirtualMachineController::class, 'sendText'])->name('vms.send-text');
     Route::post('vms/{vm}/start', [VirtualMachineController::class, 'start'])->name('vms.start');
     Route::post('vms/{vm}/stop', [VirtualMachineController::class, 'stop'])->name('vms.stop');
     Route::resource('users', UserController::class)->except(['show']);

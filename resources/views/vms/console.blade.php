@@ -60,6 +60,13 @@
             <textarea id="vnc-paste-text" rows="5"
                 class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded p-2 resize-none focus:outline-none focus:border-cyan-500 font-mono"
                 placeholder="{{ __('ui.vm.paste_clipboard_placeholder') }}"></textarea>
+            <div class="mt-3 flex items-center">
+                <input id="vnc-paste-tty-ru" type="checkbox"
+                    class="rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500 w-4 h-4">
+                <label for="vnc-paste-tty-ru" class="ml-2 text-sm text-slate-300">
+                    {{ __('ui.vm.paste_tty_ru') }}
+                </label>
+            </div>
             <div class="flex justify-end gap-2 mt-3">
                 <button id="vnc-paste-cancel" type="button" class="px-3 py-1.5 bg-slate-600 text-slate-300 rounded text-sm hover:bg-slate-500">
                     {{ __('ui.cancel') }}
@@ -175,25 +182,20 @@
             showError('noVNC не загружен. ' + (lastError ? lastError.message : ''));
         }
 
-        function sendTextToVnc(rfb, text) {
-            for (const char of text) {
-                const code = char.charCodeAt(0);
-                let keysym;
-                if (char === '\n' || char === '\r') {
-                    keysym = 0xFF0D;
-                } else if (char === '\t') {
-                    keysym = 0xFF09;
-                } else if (char === '\b') {
-                    keysym = 0xFF08;
-                } else if (code >= 0x20 && code <= 0x7e) {
-                    keysym = code;
-                } else if (code >= 0x80) {
-                    keysym = 0x01000000 + code;
-                } else {
-                    continue;
-                }
-                rfb.sendKey(keysym, '', true);
-                rfb.sendKey(keysym, '', false);
+        async function sendTextToVm(text, keyboardLayout) {
+            const url = @json(route('vms.send-text', $vm));
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            const body = { text };
+            if (keyboardLayout) body.keyboard_layout = keyboardLayout;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!data.success) {
+                console.error('[VNC] send-text failed:', data.error_message || res.statusText);
+                alert(data.error_message || '{{ __("ui.vm.paste_clipboard_send") }} failed');
             }
         }
 
@@ -231,12 +233,11 @@
             if (e.key === 'Escape' && !pasteModal.classList.contains('hidden')) closePasteModal();
         });
         if (btnPasteSend) {
-            btnPasteSend.addEventListener('click', function() {
-                const rfb = window._vncRfb;
-                if (!rfb) return;
+            btnPasteSend.addEventListener('click', async function() {
                 const text = pasteTextarea.value;
-                if (text) sendTextToVnc(rfb, text);
+                const ttyRu = document.getElementById('vnc-paste-tty-ru')?.checked;
                 closePasteModal();
+                if (text) await sendTextToVm(text, ttyRu ? 'tty_ru' : '');
             });
         }
     </script>

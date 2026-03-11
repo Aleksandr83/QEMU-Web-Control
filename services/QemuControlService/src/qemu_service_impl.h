@@ -30,10 +30,15 @@ public:
                                const CapturePreviewRequest* request,
                                CapturePreviewResponse* response) override;
 
+    bool SendTextToVm(const std::string& vm_id, const std::string& uuid, const std::string& text,
+                     const std::string& keyboard_layout, std::string* err_out);
+
 private:
     bool isRunning(int pid) const;
     std::string buildQemuCommand(const StartVmRequest* request) const;
     bool doQmpScreendump(const std::string& socket_path, const std::string& out_path, std::string* err_out);
+    bool doSendTextViaQmp(const std::string& socket_path, const std::string& text,
+                         const std::string& keyboard_layout, std::string* err_out);
 
     Config* config_;
     Logger* logger_;

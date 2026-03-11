@@ -219,6 +219,19 @@ class QemuService
         return true;
     }
 
+    public function sendTextToVm(VirtualMachine $vm, string $text, string $keyboardLayout = ''): array
+    {
+        $client = new QemuControlServiceClient(config('qemu.qemu_control_service_url'));
+        $result = $client->sendText($vm->vm_id, $vm->uuid ?? null, $text, $keyboardLayout);
+        if (!$result) {
+            return ['success' => false, 'error_message' => 'External QEMU service failed'];
+        }
+        return [
+            'success' => (bool) ($result['success'] ?? false),
+            'error_message' => $result['error_message'] ?? null,
+        ];
+    }
+
     private function checkStatusViaExternalService(VirtualMachine $vm): string
     {
         $client = new QemuControlServiceClient(config('qemu.qemu_control_service_url'));

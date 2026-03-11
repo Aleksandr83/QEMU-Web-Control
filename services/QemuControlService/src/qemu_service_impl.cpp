@@ -13,6 +13,7 @@
 #include <thread>
 #include <sys/stat.h>
 #include <filesystem>
+#include <unordered_map>
 
 namespace qemu {
 namespace control {
@@ -498,6 +499,196 @@ bool QemuServiceImpl::doQmpScreendump(const std::string& socket_path, const std:
     }
     if (err_out) *err_out = "screendump file not created or empty";
     return false;
+}
+
+static bool qmpSendCommand(int sock, const std::string& cmd, char* buf, size_t buf_size, std::string* err) {
+    std::string send_str = cmd + "\r\n";
+    if (send(sock, send_str.c_str(), send_str.size(), 0) != static_cast<ssize_t>(send_str.size())) {
+        if (err) *err = std::string("QMP send failed: ") + strerror(errno);
+        return false;
+    }
+    return qmpReadUntilReturn(sock, buf, buf_size, err);
+}
+
+bool QemuServiceImpl::doSendTextViaQmp(const std::string& socket_path, const std::string& text,
+                                       const std::string& keyboard_layout, std::string* err_out) {
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) {
+        if (err_out) *err_out = std::string("socket failed: ") + strerror(errno);
+        return false;
+    }
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    if (socket_path.size() >= sizeof(addr.sun_path)) {
+        close(sock);
+        if (err_out) *err_out = "socket path too long";
+        return false;
+    }
+    strncpy(addr.sun_path, socket_path.c_str(), sizeof(addr.sun_path) - 1);
+    if (connect(sock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0) {
+        std::string e = std::string("QMP connect failed: ") + strerror(errno);
+        close(sock);
+        if (err_out) *err_out = e;
+        return false;
+    }
+    char buf[4096];
+    if (!qmpReadGreeting(sock, buf, sizeof(buf), err_out)) { close(sock); return false; }
+    if (!qmpSendCommand(sock, "{\"execute\":\"qmp_capabilities\"}", buf, sizeof(buf), err_out)) { close(sock); return false; }
+
+    struct KeyMap { const char* qcode; bool shift; };
+    static const std::unordered_map<char, KeyMap> kMap = {
+        {' ', {"spc", false}}, {'\t', {"tab", false}}, {'\n', {"ret", false}},
+        {'a',{"a",false}},{'b',{"b",false}},{'c',{"c",false}},{'d',{"d",false}},{'e',{"e",false}},{'f',{"f",false}},
+        {'g',{"g",false}},{'h',{"h",false}},{'i',{"i",false}},{'j',{"j",false}},{'k',{"k",false}},{'l',{"l",false}},
+        {'m',{"m",false}},{'n',{"n",false}},{'o',{"o",false}},{'p',{"p",false}},{'q',{"q",false}},{'r',{"r",false}},
+        {'s',{"s",false}},{'t',{"t",false}},{'u',{"u",false}},{'v',{"v",false}},{'w',{"w",false}},{'x',{"x",false}},
+        {'y',{"y",false}},{'z',{"z",false}},
+        {'A',{"a",true}},{'B',{"b",true}},{'C',{"c",true}},{'D',{"d",true}},{'E',{"e",true}},{'F',{"f",true}},
+        {'G',{"g",true}},{'H',{"h",true}},{'I',{"i",true}},{'J',{"j",true}},{'K',{"k",true}},{'L',{"l",true}},
+        {'M',{"m",true}},{'N',{"n",true}},{'O',{"o",true}},{'P',{"p",true}},{'Q',{"q",true}},{'R',{"r",true}},
+        {'S',{"s",true}},{'T',{"t",true}},{'U',{"u",true}},{'V',{"v",true}},{'W',{"w",true}},{'X',{"x",true}},
+        {'Y',{"y",true}},{'Z',{"z",true}},
+        {'0',{"0",false}},{'1',{"1",false}},{'2',{"2",false}},{'3',{"3",false}},{'4',{"4",false}},
+        {'5',{"5",false}},{'6',{"6",false}},{'7',{"7",false}},{'8',{"8",false}},{'9',{"9",false}},
+        {'-',{"minus",false}},{'=',{"equal",false}},{'[',{"bracket_left",false}},{']',{"bracket_right",false}},
+        {'\\',{"backslash",false}},{';',{"semicolon",false}},{'\'',{"apostrophe",false}},{'`',{"grave_accent",false}},
+        {',',{"comma",false}},{'.',{"dot",false}},{'/',{"slash",false}},
+        {'!',{"1",true}},{'@',{"2",true}},{'#',{"3",true}},{'$',{"4",true}},{'%',{"5",true}},
+        {'^',{"6",true}},{'&',{"7",true}},{'*',{"8",true}},{'(',{"9",true}},{')',{"0",true}},
+        {'_',{"minus",true}},{'+',{"equal",true}},{'{',{"bracket_left",true}},{'}',{"bracket_right",true}},
+        {'|',{"backslash",true}},{':',{"semicolon",true}},{'"',{"apostrophe",true}},{'~',{"grave_accent",true}},
+        {'<',{"comma",true}},{'>',{"dot",true}},{'?',{"slash",true}},
+    };
+
+    static const std::unordered_map<unsigned int, KeyMap> kMapRu = {
+        {0x0430,{"f",false}},{0x0431,{"comma",false}},{0x0432,{"d",false}},{0x0433,{"u",false}},
+        {0x0434,{"l",false}},{0x0435,{"t",false}},{0x0451,{"grave_accent",false}},
+        {0x0436,{"semicolon",false}},{0x0437,{"p",false}},{0x0438,{"b",false}},{0x0439,{"q",false}},
+        {0x043a,{"r",false}},{0x043b,{"k",false}},{0x043c,{"v",false}},{0x043d,{"y",false}},
+        {0x043e,{"j",false}},{0x043f,{"g",false}},{0x0440,{"h",false}},{0x0441,{"c",false}},
+        {0x0442,{"n",false}},{0x0443,{"e",false}},{0x0444,{"a",false}},{0x0445,{"bracket_left",false}},
+        {0x0446,{"w",false}},{0x0447,{"x",false}},{0x0448,{"i",false}},{0x0449,{"o",false}},
+        {0x044a,{"bracket_right",false}},{0x044b,{"s",false}},{0x044c,{"m",false}},
+        {0x044d,{"apostrophe",false}},{0x044e,{"dot",false}},{0x044f,{"z",false}},
+        {0x0410,{"f",true}},{0x0411,{"comma",true}},{0x0412,{"d",true}},{0x0413,{"u",true}},
+        {0x0414,{"l",true}},{0x0415,{"t",true}},{0x0401,{"grave_accent",true}},
+        {0x0416,{"semicolon",true}},{0x0417,{"p",true}},{0x0418,{"b",true}},{0x0419,{"q",true}},
+        {0x041a,{"r",true}},{0x041b,{"k",true}},{0x041c,{"v",true}},{0x041d,{"y",true}},
+        {0x041e,{"j",true}},{0x041f,{"g",true}},{0x0420,{"h",true}},{0x0421,{"c",true}},
+        {0x0422,{"n",true}},{0x0423,{"e",true}},{0x0424,{"a",true}},{0x0425,{"bracket_left",true}},
+        {0x0426,{"w",true}},{0x0427,{"x",true}},{0x0428,{"i",true}},{0x0429,{"o",true}},
+        {0x042a,{"bracket_right",true}},{0x042b,{"s",true}},{0x042c,{"m",true}},
+        {0x042d,{"apostrophe",true}},{0x042e,{"dot",true}},{0x042f,{"z",true}},
+    };
+
+    bool use_tty_ru = (keyboard_layout == "tty_ru");
+
+    for (size_t i = 0; i < text.size(); ) {
+        unsigned int cp;
+        unsigned char b0 = static_cast<unsigned char>(text[i]);
+        if (b0 < 0x80) {
+            cp = b0;
+            ++i;
+        } else if (b0 >= 0xc2 && b0 <= 0xdf && i + 1 < text.size()) {
+            unsigned char b1 = static_cast<unsigned char>(text[i + 1]);
+            if ((b1 & 0xc0) == 0x80) { cp = ((b0 & 0x1f) << 6) | (b1 & 0x3f); i += 2; }
+            else { cp = b0; ++i; }
+        } else if (b0 >= 0xe0 && b0 <= 0xef && i + 2 < text.size()) {
+            unsigned char b1 = static_cast<unsigned char>(text[i + 1]), b2 = static_cast<unsigned char>(text[i + 2]);
+            if ((b1 & 0xc0) == 0x80 && (b2 & 0xc0) == 0x80) {
+                cp = ((b0 & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f);
+                i += 3;
+            } else { cp = b0; ++i; }
+        } else if (b0 >= 0xf0 && b0 <= 0xf4 && i + 3 < text.size()) {
+            unsigned char b1 = static_cast<unsigned char>(text[i + 1]), b2 = static_cast<unsigned char>(text[i + 2]);
+            unsigned char b3 = static_cast<unsigned char>(text[i + 3]);
+            if ((b1 & 0xc0) == 0x80 && (b2 & 0xc0) == 0x80 && (b3 & 0xc0) == 0x80) {
+                cp = ((b0 & 0x07) << 18) | ((b1 & 0x3f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f);
+                i += 4;
+            } else { cp = b0; ++i; }
+        } else { cp = b0; ++i; }
+
+        if (cp <= 0x7f) {
+            auto it = kMap.find(static_cast<char>(cp));
+            if (it == kMap.end()) continue;
+            const KeyMap& km = it->second;
+            std::string events;
+            if (km.shift) {
+                events = "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"shift\"},\"down\":true}},";
+            }
+            events += "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"" + std::string(km.qcode) + "\"},\"down\":true}},";
+            events += "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"" + std::string(km.qcode) + "\"},\"down\":false}}";
+            if (km.shift) {
+                events += ",{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"shift\"},\"down\":false}}";
+            }
+            std::string cmd = "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[" + events + "]}}";
+            if (!qmpSendCommand(sock, cmd, buf, sizeof(buf), err_out)) { close(sock); return false; }
+        } else if (use_tty_ru) {
+            auto it = kMapRu.find(cp);
+            if (it != kMapRu.end()) {
+                const KeyMap& km = it->second;
+                std::string events;
+                if (km.shift) {
+                    events = "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"shift\"},\"down\":true}},";
+                }
+                events += "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"" + std::string(km.qcode) + "\"},\"down\":true}},"
+                    "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"" + std::string(km.qcode) + "\"},\"down\":false}}";
+                if (km.shift) {
+                    events += ",{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"shift\"},\"down\":false}}";
+                }
+                std::string cmd2 = "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[" + events + "]}}";
+                if (!qmpSendCommand(sock, cmd2, buf, sizeof(buf), err_out)) { close(sock); return false; }
+            }
+        } else if (cp <= 0x10ffff) {
+            char hex[12];
+            int len = snprintf(hex, sizeof(hex), "%x", cp);
+            if (len <= 0 || len > 8) continue;
+            std::string csu = "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"ctrl\"},\"down\":true}},"
+                "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"shift\"},\"down\":true}},"
+                "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"u\"},\"down\":true}},"
+                "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"u\"},\"down\":false}},"
+                "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"shift\"},\"down\":false}},"
+                "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"ctrl\"},\"down\":false}}";
+            if (!qmpSendCommand(sock, "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[" + csu + "]}}", buf, sizeof(buf), err_out)) { close(sock); return false; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            for (int h = 0; h < len; ++h) {
+                char qc = hex[h];
+                std::string qcode_str(1, (qc >= 'a' && qc <= 'f') ? qc : (qc >= '0' && qc <= '9') ? qc : '0');
+                std::string ev = "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"" + qcode_str + "\"},\"down\":true}},"
+                    "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"" + qcode_str + "\"},\"down\":false}}";
+                if (!qmpSendCommand(sock, "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[" + ev + "]}}", buf, sizeof(buf), err_out)) { close(sock); return false; }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            std::string ret = "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"ret\"},\"down\":true}},"
+                "{\"type\":\"key\",\"data\":{\"key\":{\"type\":\"qcode\",\"data\":\"ret\"},\"down\":false}}";
+            if (!qmpSendCommand(sock, "{\"execute\":\"input-send-event\",\"arguments\":{\"events\":[" + ret + "]}}", buf, sizeof(buf), err_out)) { close(sock); return false; }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+    close(sock);
+    return true;
+}
+
+bool QemuServiceImpl::SendTextToVm(const std::string& vm_id, const std::string& uuid, const std::string& text,
+                                   const std::string& keyboard_layout, std::string* err_out) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = vm_qmp_sockets_.find(vm_id);
+    std::string path;
+    if (it != vm_qmp_sockets_.end()) {
+        path = it->second;
+    } else {
+        std::string dir = config_->qmp_socket_dir();
+        while (!dir.empty() && dir.back() == '/') dir.pop_back();
+        std::string suf = (!uuid.empty() ? uuid : vm_id) + ".qmp";
+        path = dir + "/qemu-" + suf;
+        struct stat st;
+        if (stat(path.c_str(), &st) != 0 || !S_ISSOCK(st.st_mode)) {
+            if (err_out) *err_out = "VM not found or QMP socket unknown";
+            return false;
+        }
+    }
+    return doSendTextViaQmp(path, text, keyboard_layout, err_out);
 }
 
 }  // namespace control

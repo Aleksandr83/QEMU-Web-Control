@@ -142,6 +142,40 @@ class QemuControlServiceClient
         }
     }
 
+    public function sendText(string $vmId, ?string $uuid, string $text, string $keyboardLayout = ''): ?array
+    {
+        $url = rtrim($this->baseUrl, '/') . '/send-text';
+        $request = ['vm_id' => $vmId, 'text' => $text];
+        if ($uuid !== null && $uuid !== '') {
+            $request['uuid'] = $uuid;
+        }
+        if ($keyboardLayout !== '') {
+            $request['keyboard_layout'] = $keyboardLayout;
+        }
+        try {
+            $response = Http::timeout(60)->post($url, $request);
+            $body = $response->json();
+            InfoLog::log(
+                self::SERVICE_NAME,
+                'POST',
+                $url,
+                ['vm_id' => $vmId, 'text_length' => strlen($text)],
+                $body ?? ['body' => $response->body()],
+                $response->status(),
+                $response->successful() ? null : $response->body(),
+                'send-text'
+            );
+            if ($response->successful()) {
+                return $body;
+            }
+            return null;
+        } catch (\Throwable $e) {
+            InfoLog::log(self::SERVICE_NAME, 'POST', $url, $request, null, null, $e->getMessage(), 'send-text');
+            Log::error('QemuControlService send-text error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     public function health(): bool
     {
         $url = rtrim($this->baseUrl, '/') . '/health';
