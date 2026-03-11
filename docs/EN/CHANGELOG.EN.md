@@ -4,13 +4,8 @@
 
 ### ⚠️ Important Note
 
-Installing on RISC-V (Orange Pi RV2) is an **adventure**! Not everything will go smoothly the first time.
+Installing on RISC-V (Orange Pi RV2):
 - Build will take 20-30 minutes
-- Permission issues may occur
-- Database may not be created automatically
-- NPM can be finicky
-
-**But it's solvable!** See [TROUBLESHOOTING.EN.md](TROUBLESHOOTING.EN.md) / [TROUBLESHOOTING.RU.md](../RU/TROUBLESHOOTING.RU.md)
 
 ### Added
 - ✅ **VM autostart** on system boot
