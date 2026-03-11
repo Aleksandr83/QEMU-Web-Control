@@ -41,9 +41,32 @@
                     Ctrl+Alt+Del
                 </button>
                 @endif
+                <button type="button" id="btn-paste-clipboard" class="px-3 py-1 bg-slate-600 text-slate-300 rounded text-sm hover:bg-slate-500" title="{{ __('ui.vm.paste_clipboard') }}">
+                    &#128203; {{ __('ui.vm.paste_clipboard') }}
+                </button>
                 <a href="{{ route('vms.index') }}" class="px-3 py-1 bg-slate-600 text-slate-300 rounded text-sm hover:bg-slate-500">
                     {{ __('ui.virtual_machines') }}
                 </a>
+            </div>
+        </div>
+    </div>
+
+    <div id="vnc-paste-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div class="bg-slate-800 border border-slate-600 rounded-lg p-4 w-full max-w-md mx-4 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-white font-semibold text-sm">{{ __('ui.vm.paste_clipboard') }}</h3>
+                <button id="vnc-paste-close" type="button" class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
+            </div>
+            <textarea id="vnc-paste-text" rows="5"
+                class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded p-2 resize-none focus:outline-none focus:border-cyan-500 font-mono"
+                placeholder="{{ __('ui.vm.paste_clipboard_placeholder') }}"></textarea>
+            <div class="flex justify-end gap-2 mt-3">
+                <button id="vnc-paste-cancel" type="button" class="px-3 py-1.5 bg-slate-600 text-slate-300 rounded text-sm hover:bg-slate-500">
+                    {{ __('ui.cancel') }}
+                </button>
+                <button id="vnc-paste-send" type="button" class="px-3 py-1.5 bg-cyan-600 text-white rounded text-sm hover:bg-cyan-500">
+                    {{ __('ui.vm.paste_clipboard_send') }}
+                </button>
             </div>
         </div>
     </div>
@@ -147,8 +170,74 @@
                     rfb.sendCtrlAltDel();
                 });
             }
+            window._vncRfb = rfb;
         } else {
             showError('noVNC не загружен. ' + (lastError ? lastError.message : ''));
+        }
+
+        function sendTextToVnc(rfb, text) {
+            for (const char of text) {
+                const code = char.charCodeAt(0);
+                let keysym;
+                if (char === '\n' || char === '\r') {
+                    keysym = 0xFF0D;
+                } else if (char === '\t') {
+                    keysym = 0xFF09;
+                } else if (char === '\b') {
+                    keysym = 0xFF08;
+                } else if (code >= 0x20 && code <= 0x7e) {
+                    keysym = code;
+                } else if (code >= 0x80) {
+                    keysym = 0x01000000 + code;
+                } else {
+                    continue;
+                }
+                rfb.sendKey(keysym, '', true);
+                rfb.sendKey(keysym, '', false);
+            }
+        }
+
+        const pasteModal = document.getElementById('vnc-paste-modal');
+        const pasteTextarea = document.getElementById('vnc-paste-text');
+        const btnPaste = document.getElementById('btn-paste-clipboard');
+        const btnPasteSend = document.getElementById('vnc-paste-send');
+        const btnPasteCancel = document.getElementById('vnc-paste-cancel');
+        const btnPasteClose = document.getElementById('vnc-paste-close');
+
+        function openPasteModal() {
+            pasteTextarea.value = '';
+            pasteModal.classList.remove('hidden');
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                navigator.clipboard.readText().then(text => {
+                    pasteTextarea.value = text;
+                }).catch(() => {}).finally(() => pasteTextarea.focus());
+            } else {
+                pasteTextarea.focus();
+            }
+        }
+
+        function closePasteModal() {
+            pasteModal.classList.add('hidden');
+        }
+
+        if (btnPaste) {
+            btnPaste.addEventListener('click', openPasteModal);
+        }
+        [btnPasteCancel, btnPasteClose].forEach(btn => btn && btn.addEventListener('click', closePasteModal));
+        pasteModal.addEventListener('click', function(e) {
+            if (e.target === pasteModal) closePasteModal();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && !pasteModal.classList.contains('hidden')) closePasteModal();
+        });
+        if (btnPasteSend) {
+            btnPasteSend.addEventListener('click', function() {
+                const rfb = window._vncRfb;
+                if (!rfb) return;
+                const text = pasteTextarea.value;
+                if (text) sendTextToVnc(rfb, text);
+                closePasteModal();
+            });
         }
     </script>
 </x-layouts.app>
