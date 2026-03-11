@@ -5,6 +5,13 @@ set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Ensure all shell scripts are executable (lost when downloading ZIP from GitHub)
+find "$SCRIPT_DIR" -maxdepth 2 -name "*.sh" \
+    ! -path "*/vendor/*" ! -path "*/node_modules/*" \
+    -exec chmod +x {} \; 2>/dev/null || true
+chmod +x "$SCRIPT_DIR/artisan" 2>/dev/null || true
+
 # shellcheck source=scripts/safe-rm.sh
 source "${SCRIPT_DIR}/scripts/safe-rm.sh"
 
