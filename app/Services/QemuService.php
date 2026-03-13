@@ -158,6 +158,7 @@ class QemuService
             return $this->failStart($vm, 'No disk definition');
         }
 
+        $networkType = $vm->network_type ?? 'user';
         $params = [
             'vm_id' => $vm->vm_id,
             'architecture' => $vm->architecture ?: $this->defaultArchitecture,
@@ -167,12 +168,14 @@ class QemuService
             'additional_disks' => array_slice(array_column($disks, 'path'), 1),
             'iso_path' => $vm->iso_path ?? '',
             'enable_kvm' => (bool) ($vm->enable_kvm ?? true),
-            'network_type' => $vm->network_type ?? 'user',
+            'network_type' => $networkType,
             'vnc_port' => $vm->vnc_port ?? 0,
             'mac_address' => $vm->mac_address ?? '',
             'qmp_socket_path' => $this->qmpSocketPath($vm),
         ];
-
+        if ($networkType === 'bridge' && !empty($vm->network_interface)) {
+            $params['bridge_interface'] = $vm->network_interface;
+        }
         $result = $client->startVm($params);
         if (!$result || !($result['success'] ?? false)) {
             $errMsg = $result['error_message'] ?? 'External QEMU service failed';
@@ -196,6 +199,16 @@ class QemuService
             'pid' => $pid,
             'last_started_at' => now(),
         ]);
+
+        sleep(2);
+        $actual = $this->checkStatusViaExternalService($vm);
+        if ($actual === 'stopped') {
+            $vm->update(['status' => 'stopped', 'pid' => null]);
+            $bridgeHint = ($networkType ?? '') === 'bridge'
+                ? ' ' . __('ui.vm.bridge_start_failed_hint')
+                : '';
+            return $this->failStart($vm, __('ui.vm.process_exited_immediately') . $bridgeHint);
+        }
 
         ActivityLog::logVm(ActivityLog::ACTION_START, $vm);
         return true;

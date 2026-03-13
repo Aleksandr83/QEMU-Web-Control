@@ -5,6 +5,10 @@
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <cstdio>
+#include <cstring>
+#include <algorithm>
+#include <map>
 
 namespace qemu {
 namespace control {
@@ -49,6 +53,7 @@ void HttpServer::run() {
             pb_req.set_iso_path(j.value("iso_path", ""));
             pb_req.set_network_type(j.value("network_type", "user"));
             pb_req.set_vnc_port(j.value("vnc_port", 0));
+            pb_req.set_bridge_interface(j.value("bridge_interface", ""));
             pb_req.set_mac_address(j.value("mac_address", ""));
             pb_req.set_qmp_socket_path(j.value("qmp_socket_path", ""));
             pb_req.set_enable_kvm(j.value("enable_kvm", false));
@@ -193,6 +198,127 @@ void HttpServer::run() {
     server_->Get("/health", [](const httplib::Request&, httplib::Response& res) {
         res.set_header("Content-Type", "application/json");
         res.set_content("{\"status\":\"ok\"}", "application/json");
+    });
+
+    server_->Get("/logs", [this](const httplib::Request& req, httplib::Response& res) {
+        res.set_header("Content-Type", "application/json");
+        int limit = 500;
+        auto it = req.params.find("limit");
+        if (it != req.params.end()) {
+            try {
+                limit = std::stoi(it->second);
+                if (limit < 1) limit = 1;
+                if (limit > 5000) limit = 5000;
+            } catch (...) {}
+        }
+        auto lines = service_->getServiceLogs(limit);
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& line : lines) {
+            arr.push_back(line);
+        }
+        nlohmann::json out;
+        out["lines"] = arr;
+        res.set_content(out.dump(), "application/json");
+    });
+
+    server_->Post("/logs/clear", [this](const httplib::Request&, httplib::Response& res) {
+        res.set_header("Content-Type", "application/json");
+        bool ok = service_->clearServiceLog();
+        nlohmann::json out;
+        out["success"] = ok;
+        res.status = ok ? 200 : 500;
+        res.set_content(out.dump(), "application/json");
+    });
+
+    server_->Get("/interfaces", [](const httplib::Request&, httplib::Response& res) {
+        auto isPhysicalAdapter = [](const std::string& name) {
+            if (name.empty() || name == "lo") return false;
+            if (name.size() >= 4 && name.compare(0, 4, "veth") == 0) return false;
+            if (name.size() >= 6 && name.compare(0, 6, "docker") == 0) return false;
+            if (name.size() >= 5 && name.compare(0, 5, "virbr") == 0) return false;
+            if (name.size() >= 4 && name.compare(0, 4, "vnet") == 0) return false;
+            if (name.size() >= 3 && name.compare(0, 3, "br-") == 0) return false;
+            if (name.size() >= 3 && name.compare(0, 3, "tap") == 0) return false;
+            if (name.size() >= 3 && name.compare(0, 3, "tun") == 0) return false;
+            return true;
+        };
+        std::map<std::string, std::string> ifaceToBridge;
+        FILE* fp = popen("bridge link show 2>/dev/null", "r");
+        if (fp) {
+            char line[512];
+            while (fgets(line, sizeof(line), fp)) {
+                char* p = strchr(line, ':');
+                if (!p) continue;
+                ++p;
+                while (*p == ' ' || *p == '\t') ++p;
+                char* end = strchr(p, ':');
+                if (!end) continue;
+                std::string name(p, static_cast<size_t>(end - p));
+                while (!name.empty() && (name.back() == ' ' || name.back() == ':')) name.pop_back();
+                if (name.empty()) continue;
+                const char* master = strstr(line, " master ");
+                if (!master) continue;
+                master += 8;
+                while (*master == ' ') ++master;
+                char* end_master = const_cast<char*>(master);
+                while (*end_master && *end_master != ' ' && *end_master != '\n') ++end_master;
+                ifaceToBridge[name] = std::string(master, static_cast<size_t>(end_master - master));
+            }
+            pclose(fp);
+        }
+        nlohmann::json arr = nlohmann::json::array();
+        fp = popen("ip -o link show 2>/dev/null", "r");
+        if (fp) {
+            char line[512];
+            while (fgets(line, sizeof(line), fp)) {
+                char* p = strchr(line, ':');
+                if (!p) continue;
+                ++p;
+                while (*p == ' ' || *p == '\t') ++p;
+                char* end = strchr(p, ':');
+                if (!end) continue;
+                std::string name(p, static_cast<size_t>(end - p));
+                while (!name.empty() && (name.back() == ' ' || name.back() == ':')) name.pop_back();
+                if (name.empty() || !isPhysicalAdapter(name)) continue;
+                nlohmann::json obj;
+                obj["name"] = name;
+                obj["bridge"] = ifaceToBridge.count(name) ? ifaceToBridge[name] : "";
+                arr.push_back(obj);
+            }
+            pclose(fp);
+        }
+        res.set_header("Content-Type", "application/json");
+        nlohmann::json out;
+        out["interfaces"] = arr;
+        res.set_content(out.dump(), "application/json");
+    });
+
+    server_->Get("/bridges", [](const httplib::Request&, httplib::Response& res) {
+        res.set_header("Content-Type", "application/json");
+        nlohmann::json j = nlohmann::json::array();
+        FILE* fp = popen("ip -o link show type bridge 2>/dev/null", "r");
+        if (fp) {
+            char line[512];
+            while (fgets(line, sizeof(line), fp)) {
+                char* p = strchr(line, ':');
+                if (p) {
+                    ++p;
+                    while (*p == ' ') ++p;
+                    char* end = strchr(p, ':');
+                    if (end) {
+                        std::string name(p, end - p);
+                        while (!name.empty() && name.back() == ' ') name.pop_back();
+                        if (!name.empty()) {
+                            j.push_back(name);
+                        }
+                    }
+                }
+            }
+            pclose(fp);
+        }
+        nlohmann::json out;
+        out["bridges"] = j;
+        res.set_content(out.dump(), "application/json");
     });
 
     server_->Get("/", [](const httplib::Request&, httplib::Response& res) {

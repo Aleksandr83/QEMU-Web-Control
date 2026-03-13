@@ -101,7 +101,7 @@ declare -A MESSAGES_EN=(
     ["apache_enable_modules"]="Enabling Apache2 modules..."
     ["apache_restart"]="Restarting Apache2..."
     ["firewall_configuring"]="Configuring firewall rules for Apache..."
-    ["firewall_no_ufw"]="UFW not found, skipping firewall configuration"
+    ["firewall_no_ufw"]="UFW not found (install: apt install ufw). Skipping firewall configuration."
     ["firewall_ufw_inactive"]="UFW is inactive, skipping firewall rule changes"
     ["firewall_iface_prompt"]="Select network interface for opening Apache ports:"
     ["firewall_iface_all"]="all interfaces"
@@ -182,6 +182,12 @@ declare -A MESSAGES_EN=(
     ["apache_port_conflict_detected"]="Apache2 is running on ports 80/443 — conflict with nginx container"
     ["apache_port_conflict_fixing"]="Switching nginx to alternative ports automatically..."
     ["apache_port_conflict_fixed"]="Nginx ports updated to avoid Apache2 conflict"
+    ["setup_bridges"]="Setting up bridges for physical network interfaces..."
+    ["bridges_ready"]="Network bridges configured"
+    ["bridge_main_nic_prompt1"]="Interface %s has IP. Create bridge %s?"
+    ["bridge_main_nic_prompt2"]="Without it, VMs with Bridge network will NOT start on this interface."
+    ["bridge_main_nic_prompt3"]="Network will reconfigure, SSH may disconnect briefly."
+    ["bridge_main_nic_confirm"]="Create bridge? [Y/n]"
 )
 
 declare -A MESSAGES_RU=(
@@ -212,7 +218,7 @@ declare -A MESSAGES_RU=(
     ["apache_enable_modules"]="Включение модулей Apache2..."
     ["apache_restart"]="Перезапуск Apache2..."
     ["firewall_configuring"]="Настройка правил firewall для Apache..."
-    ["firewall_no_ufw"]="UFW не найден, пропускаем настройку firewall"
+    ["firewall_no_ufw"]="UFW не найден (установка: apt install ufw). Настройка firewall пропущена."
     ["firewall_ufw_inactive"]="UFW неактивен, изменение правил не требуется"
     ["firewall_iface_prompt"]="Выберите сетевой интерфейс для открытия портов Apache:"
     ["firewall_iface_all"]="все интерфейсы"
@@ -293,6 +299,12 @@ declare -A MESSAGES_RU=(
     ["apache_port_conflict_detected"]="Apache2 запущен на портах 80/443 — конфликт с nginx-контейнером"
     ["apache_port_conflict_fixing"]="Автоматически переключаю nginx на альтернативные порты..."
     ["apache_port_conflict_fixed"]="Порты nginx обновлены для избежания конфликта с Apache2"
+    ["setup_bridges"]="Настройка мостов для физических сетевых интерфейсов..."
+    ["bridges_ready"]="Сетевые мосты настроены"
+    ["bridge_main_nic_prompt1"]="Интерфейс %s имеет IP. Создать мост %s?"
+    ["bridge_main_nic_prompt2"]="Без этого ВМ с сетью Bridge НЕ запустятся на этом интерфейсе."
+    ["bridge_main_nic_prompt3"]="Сеть будет перенастроена, возможен кратковременный обрыв SSH."
+    ["bridge_main_nic_confirm"]="Создать мост? [Y/n]"
 )
 
 declare -A MESSAGES
@@ -328,13 +340,13 @@ print_warning() {
 resolve_primary_ip() {
     local ip=""
 
-    ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
+    ip=$( (ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true )
     if [ -n "$ip" ] && [ "$ip" != "127.0.0.1" ]; then
         echo "$ip"
         return
     fi
 
-    ip=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\./ && $i != "127.0.0.1"){print $i; exit}}')
+    ip=$( (hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\./ && $i != "127.0.0.1"){print $i; exit}}') || true )
     if [ -n "$ip" ]; then
         echo "$ip"
         return
@@ -1399,6 +1411,65 @@ setup_qemu_dirs() {
     fi
 }
 
+setup_bridge() {
+    local script="${SCRIPT_DIR}/scripts/setup_bridge.sh"
+    if [ ! -f "$script" ]; then
+        install_log "setup_bridge: $script not found, skipping"
+        return 0
+    fi
+    export INSTALL_LOG
+    export LANG_CODE
+    export NON_INTERACTIVE
+    bash "$script"
+    cd "$SCRIPT_DIR"
+}
+
+check_bridge_main_nic() {
+    if ! command -v ip >/dev/null 2>&1; then
+        return 0
+    fi
+    local main_iface
+    main_iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
+    [ -z "$main_iface" ] && return 0
+    if [ -L "/sys/class/net/$main_iface/master" ] 2>/dev/null; then
+        return 0
+    fi
+    if ! ip -4 addr show dev "$main_iface" 2>/dev/null | grep -q "inet "; then
+        install_log "check_bridge_main_nic: $main_iface has no IP, skip"
+        return 0
+    fi
+    if [ "$NON_INTERACTIVE" = true ]; then
+        print_warning "$(printf "${MESSAGES[bridge_main_nic_prompt1]}" "$main_iface" "br-${main_iface}")"
+        print_warning "${MESSAGES[bridge_main_nic_prompt2]}"
+        install_log "check_bridge_main_nic: $main_iface not in bridge (non-interactive)"
+        return 0
+    fi
+    local br_name="br-${main_iface}"
+    echo ""
+    print_warning "$(printf "${MESSAGES[bridge_main_nic_prompt1]}" "$main_iface" "$br_name")"
+    print_warning "${MESSAGES[bridge_main_nic_prompt2]}"
+    print_warning "${MESSAGES[bridge_main_nic_prompt3]}"
+    local reply
+    if [ -c /dev/tty ]; then
+        printf "%s " "${MESSAGES[bridge_main_nic_confirm]}"
+        read -r reply < /dev/tty 2>/dev/null || reply=""
+    else
+        reply=""
+    fi
+    if [[ "$reply" =~ ^[nN]$ ]]; then
+        install_log "check_bridge_main_nic: user declined bridge for $main_iface"
+        return 0
+    fi
+    install_log "check_bridge_main_nic: creating bridge $br_name for $main_iface (user confirmed)"
+    export INSTALL_LOG
+    if bash "${SCRIPT_DIR}/scripts/setup_bridge_main_nic.sh" --yes 2>&1 | tee -a "${INSTALL_LOG:-/dev/null}"; then
+        print_success "Bridge $br_name created"
+    else
+        print_warning "Bridge creation failed. Run: sudo ${SCRIPT_DIR}/scripts/setup_bridge_main_nic.sh"
+    fi
+    echo ""
+}
+
 setup_boot_images_service() {
     local script="${SCRIPT_DIR}/scripts/install-boot-images-service.sh"
     if [ ! -f "$script" ]; then
@@ -2378,7 +2449,7 @@ show_completion_message() {
     fi
 
     local primary_ip app_host url_no_proto
-    primary_ip=$(resolve_primary_ip)
+    primary_ip=$(resolve_primary_ip) || primary_ip=""
     install_log "primary_ip (for APP_URL): ${primary_ip:-not resolved}"
     url_no_proto="${APP_URL#*://}"
     app_host="${url_no_proto%%[:/]*}"
@@ -2584,6 +2655,8 @@ main() {
     check_apache_port_conflict
     install_log "--- setup_qemu_dirs"
     setup_qemu_dirs
+    install_log "--- setup_bridge"
+    setup_bridge
     install_log "--- generate_ssl"
     generate_ssl
     install_log "--- setup_boot_images_service"
@@ -2600,6 +2673,8 @@ main() {
     check_apache
     install_log "--- configure_direct_web_firewall"
     configure_direct_web_firewall
+    install_log "--- check_bridge_main_nic"
+    check_bridge_main_nic
     install_log "--- show_completion_message"
     show_completion_message
 }

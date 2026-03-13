@@ -27,6 +27,7 @@ class VirtualMachine extends Model
         'architecture',
         'iso_path',
         'network_type',
+        'network_interface',
         'mac_address',
         'vnc_port',
         'status',

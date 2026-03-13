@@ -6,6 +6,7 @@
 #include <grpcpp/grpcpp.h>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace qemu {
 namespace control {
@@ -33,9 +34,12 @@ public:
     bool SendTextToVm(const std::string& vm_id, const std::string& uuid, const std::string& text,
                      const std::string& keyboard_layout, std::string* err_out);
 
+    std::vector<std::string> getServiceLogs(int max_lines) const;
+    bool clearServiceLog() const;
+
 private:
     bool isRunning(int pid) const;
-    std::string buildQemuCommand(const StartVmRequest* request) const;
+    std::string buildQemuCommand(const StartVmRequest* request, std::string* error_out = nullptr) const;
     bool doQmpScreendump(const std::string& socket_path, const std::string& out_path, std::string* err_out);
     bool doSendTextViaQmp(const std::string& socket_path, const std::string& text,
                          const std::string& keyboard_layout, std::string* err_out);

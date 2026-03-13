@@ -50,6 +50,7 @@ Route::middleware(['auth', \App\Http\Middleware\SetLocaleMiddleware::class])->gr
     Route::get('activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
     Route::get('activity-logs/trigger-preview', [ActivityLogController::class, 'triggerPreview'])->name('activity-logs.trigger-preview');
     Route::post('activity-logs/clear', [ActivityLogController::class, 'clear'])->name('activity-logs.clear');
+    Route::post('activity-logs/clear-service', [ActivityLogController::class, 'clearServiceLog'])->name('activity-logs.clear-service');
     Route::post('activity-logs/clear-all', [ActivityLogController::class, 'clearAll'])->name('activity-logs.clear-all');
     Route::get('certificates', [CertificateController::class, 'index'])->name('certificates.index');
     Route::post('certificates', [CertificateController::class, 'store'])->name('certificates.store');

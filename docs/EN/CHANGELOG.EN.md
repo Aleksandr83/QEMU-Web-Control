@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.3] - 2026-03-16
+
+### Added
+- **Bridge network: select network interface** — In VM settings (create/edit) for bridge mode, you can now choose a physical network interface (e.g. enp0s3). The interface is stored in the database; on VM start, the service resolves the bridge containing that interface via `bridge link show`.
+- **Logs tab: QemuControlService** — New "QemuControlService" tab on the Logs page shows the last 500 lines of the C++ service log (via HTTP GET /logs). Auto-refresh every 5 seconds, copy button, log clearing.
+
+### Changed
+- **Interface list** — GET /interfaces returns only physical adapters; virtual interfaces (lo, veth*, docker*, virbr*, vnet*, br-*, tap*, tun*) are excluded.
+- **Bridge resolution** — Interface list is built from `ip link show`; bridge membership is looked up via `bridge link show`. Interfaces not in a bridge are also shown (with empty bridge).
+- **Logging** — QemuControlService logs which bridge is used and how it was resolved (from interface, first bridge, or default br0).
+
+### Fixed
+- Bridge network mode: VMs with bridge type now start correctly; bridge list is loaded from the host.
+- Blade template: missing `@endif` for `@if` in activity-logs index view.
+
 ## [0.0.2] - 2026-02-06
 
 ### ⚠️ Important Note
@@ -91,6 +106,18 @@ Installing on RISC-V (Orange Pi RV2):
 ---
 
 ## Migration
+
+### From 0.0.2 to 0.0.3
+
+1. Update project files
+2. Run migration:
+```bash
+docker compose exec app php artisan migrate
+```
+3. Rebuild QemuControlService (if built from source):
+```bash
+cd services/QemuControlService/build && cmake .. && make && sudo systemctl restart QemuControlService
+```
 
 ### From 0.0.1 to 0.0.2
 

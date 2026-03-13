@@ -176,6 +176,72 @@ class QemuControlServiceClient
         }
     }
 
+    public function getLogs(?int $limit = 500): ?array
+    {
+        $url = rtrim($this->baseUrl, '/') . '/logs';
+        if ($limit !== null && $limit > 0) {
+            $url .= '?limit=' . min(5000, $limit);
+        }
+        try {
+            $response = Http::timeout(10)->get($url);
+            if (!$response->successful()) {
+                return null;
+            }
+            $body = $response->json();
+            $lines = $body['lines'] ?? null;
+            return is_array($lines) ? ['lines' => $lines] : null;
+        } catch (\Throwable $e) {
+            Log::warning('QemuControlService getLogs error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function clearServiceLog(): bool
+    {
+        $url = rtrim($this->baseUrl, '/') . '/logs/clear';
+        try {
+            $response = Http::timeout(5)->post($url);
+            return $response->successful() && ($response->json()['success'] ?? false);
+        } catch (\Throwable $e) {
+            Log::warning('QemuControlService clearServiceLog error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function getInterfaces(): ?array
+    {
+        $url = rtrim($this->baseUrl, '/') . '/interfaces';
+        try {
+            $response = Http::timeout(5)->get($url);
+            if (!$response->successful()) {
+                return null;
+            }
+            $body = $response->json();
+            $interfaces = $body['interfaces'] ?? null;
+            return is_array($interfaces) ? $interfaces : null;
+        } catch (\Throwable $e) {
+            Log::warning('QemuControlService getInterfaces error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function getBridges(): ?array
+    {
+        $url = rtrim($this->baseUrl, '/') . '/bridges';
+        try {
+            $response = Http::timeout(5)->get($url);
+            if (!$response->successful()) {
+                return null;
+            }
+            $body = $response->json();
+            $bridges = $body['bridges'] ?? null;
+            return is_array($bridges) ? $bridges : null;
+        } catch (\Throwable $e) {
+            Log::warning('QemuControlService getBridges error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     public function health(): bool
     {
         $url = rtrim($this->baseUrl, '/') . '/health';

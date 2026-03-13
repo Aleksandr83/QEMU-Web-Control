@@ -24,7 +24,21 @@
             >
                 {{ __('ui.logs_info') }}
             </a>
+            <a
+                href="{{ route('activity-logs.index', ['tab' => 'service']) }}"
+                class="px-4 py-2 rounded-lg text-sm font-medium {{ ($tab ?? 'activity') === 'service' ? 'text-white bg-slate-700' : 'text-slate-300 hover:text-white hover:bg-slate-700/50' }} transition-all"
+            >
+                {{ __('ui.logs_service') }}
+            </a>
             <div class="ml-auto flex items-center gap-2">
+                @if(($tab ?? '') === 'service')
+                <form method="POST" action="{{ route('activity-logs.clear-service') }}" class="inline" onsubmit="return confirm('{{ __('ui.logs_clear_confirm') }}');">
+                    @csrf
+                    <button type="submit" class="px-3 py-1.5 rounded-lg text-sm bg-slate-600 hover:bg-slate-500 text-slate-200 transition-all">
+                        {{ __('ui.logs_clear') }}
+                    </button>
+                </form>
+                @else
                 <form method="POST" action="{{ route('activity-logs.clear') }}" class="inline" onsubmit="return confirm('{{ __('ui.logs_clear_confirm') }}');">
                     @csrf
                     <input type="hidden" name="tab" value="{{ $tab ?? 'activity' }}">
@@ -42,6 +56,7 @@
                         {{ __('ui.logs_clear_all') }}
                     </button>
                 </form>
+                @endif
             </div>
         </div>
 
@@ -260,6 +275,19 @@
             <div class="mt-6">
                 {{ $infoLogs?->links('pagination::slate') }}
             </div>
+        @elseif(($tab ?? 'activity') === 'service')
+            <div class="card overflow-hidden">
+                @if($serviceLogsError ?? null)
+                    <p class="px-4 py-4 text-amber-400">{{ $serviceLogsError }}</p>
+                @else
+                    <div class="flex justify-end p-2 border-b border-slate-700/50">
+                        <button type="button" class="log-copy-btn px-3 py-1 rounded text-xs bg-slate-600 hover:bg-slate-500 text-slate-200" data-copy-target="service-logs-pre" title="{{ __('ui.logs_copy') }}">
+                            {{ __('ui.logs_copy') }}
+                        </button>
+                    </div>
+                    <pre id="service-logs-pre" class="p-4 text-xs font-mono text-slate-300 overflow-x-auto overflow-y-auto max-h-[70vh] whitespace-pre-wrap break-words scrollbar-slate">{{ implode("\n", $serviceLogs ?? []) }}</pre>
+                @endif
+            </div>
         @endif
         </div>
     </div>
@@ -300,7 +328,10 @@
                 if (copyBtn) {
                     e.preventDefault();
                     var cell = copyBtn.closest('td');
-                    var pre = cell && cell.querySelector('.log-expanded-view');
+                    var pre = cell ? cell.querySelector('.log-expanded-view') : null;
+                    if (!pre && copyBtn.closest('.service-logs-card')) {
+                        pre = copyBtn.closest('.card')?.querySelector('pre');
+                    }
                     var text = (pre ? pre.textContent : '').trim();
                     if (!text) return;
                     var orig = copyBtn.innerHTML;

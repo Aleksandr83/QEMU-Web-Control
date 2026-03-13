@@ -1,5 +1,6 @@
 #include "qemu_service_impl.h"
 #include <cerrno>
+#include <cstdio>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -13,7 +14,10 @@
 #include <thread>
 #include <sys/stat.h>
 #include <filesystem>
+#include <deque>
 #include <unordered_map>
+#include <deque>
+#include <vector>
 
 namespace qemu {
 namespace control {
@@ -41,12 +45,13 @@ grpc::Status QemuServiceImpl::StartVm(grpc::ServerContext* context,
         logger_->info("StartVm vm_id=" + request->vm_id() + " qmp_socket_path=" + request->qmp_socket_path() +
             (ec ? " create_directories failed: " + ec.message() : " dir_ok"));
     }
-    std::string cmd = buildQemuCommand(request);
+    std::string build_error;
+    std::string cmd = buildQemuCommand(request, &build_error);
     logger_->info("StartVm vm_id=" + request->vm_id() + " cmd=" + cmd);
     if (cmd.empty()) {
-        logger_->error("StartVm failed: could not build QEMU command vm_id=" + request->vm_id());
+        logger_->error("StartVm failed: could not build QEMU command vm_id=" + request->vm_id() + (build_error.empty() ? "" : " err=" + build_error));
         response->set_success(false);
-        response->set_error_message("Failed to build QEMU command");
+        response->set_error_message(build_error.empty() ? "Failed to build QEMU command" : build_error);
         return grpc::Status::OK;
     }
 
@@ -303,7 +308,62 @@ static bool isArmArch(const std::string& arch) {
     return arch == "aarch64" || arch == "arm";
 }
 
-std::string QemuServiceImpl::buildQemuCommand(const StartVmRequest* request) const {
+static std::string getFirstBridge() {
+    std::string result;
+    FILE* fp = popen("ip -o link show type bridge 2>/dev/null", "r");
+    if (fp) {
+        char line[512];
+        while (fgets(line, sizeof(line), fp)) {
+            char* p = strchr(line, ':');
+            if (p) {
+                ++p;
+                while (*p == ' ' || *p == '\t') ++p;
+                char* end = strchr(p, ':');
+                if (end) {
+                    std::string name(p, static_cast<size_t>(end - p));
+                    while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) name.pop_back();
+                    if (!name.empty()) {
+                        result = name;
+                        break;
+                    }
+                }
+            }
+        }
+        pclose(fp);
+    }
+    return result;
+}
+
+static std::string getBridgeForInterface(const std::string& ifname) {
+    if (ifname.empty()) return "";
+    FILE* fp = popen("bridge link show 2>/dev/null", "r");
+    if (!fp) return "";
+    char line[512];
+    while (fgets(line, sizeof(line), fp)) {
+        char* p = strchr(line, ':');
+        if (!p) continue;
+        ++p;
+        while (*p == ' ' || *p == '\t') ++p;
+        char* end = strchr(p, ':');
+        if (!end) continue;
+        std::string name(p, static_cast<size_t>(end - p));
+        while (!name.empty() && (name.back() == ' ' || name.back() == ':')) name.pop_back();
+        if (name != ifname) continue;
+        const char* master = strstr(line, " master ");
+        if (!master) { pclose(fp); return ""; }
+        master += 8;
+        while (*master == ' ') ++master;
+        char* end_master = const_cast<char*>(master);
+        while (*end_master && *end_master != ' ' && *end_master != '\n') ++end_master;
+        std::string br(master, static_cast<size_t>(end_master - master));
+        pclose(fp);
+        return br;
+    }
+    pclose(fp);
+    return "";
+}
+
+std::string QemuServiceImpl::buildQemuCommand(const StartVmRequest* request, std::string* error_out) const {
     const std::string arch = request->architecture();
     std::ostringstream oss;
 
@@ -379,7 +439,34 @@ std::string QemuServiceImpl::buildQemuCommand(const StartVmRequest* request) con
     if (!request->mac_address().empty()) {
         oss << " -net nic,macaddr=" << request->mac_address();
     }
-    oss << " -net " << (request->network_type().empty() ? "user" : request->network_type());
+    {
+        std::string net_type = request->network_type().empty() ? "user" : request->network_type();
+        if (net_type == "bridge") {
+            std::string br;
+            const std::string bridge_if = request->bridge_interface();
+            if (!bridge_if.empty()) {
+                br = getBridgeForInterface(bridge_if);
+                if (br.empty()) {
+                    const std::string err = "Interface '" + bridge_if + "' is not in any bridge. Add it to a bridge (e.g. ip link add br0 type bridge && ip link set " + bridge_if + " master br0) or select another interface.";
+                    logger_->warn("buildQemuCommand: " + err);
+                    if (error_out) *error_out = err;
+                    return "";
+                }
+                logger_->info("buildQemuCommand: bridge resolved from interface: " + bridge_if + " -> " + br);
+            } else {
+                br = getFirstBridge();
+                if (br.empty()) {
+                    br = "br0";
+                    logger_->info("buildQemuCommand: no bridge found, using default: " + br);
+                } else {
+                    logger_->info("buildQemuCommand: using first bridge: " + br);
+                }
+            }
+            oss << " -net bridge,br=" << br;
+        } else {
+            oss << " -net " << net_type;
+        }
+    }
     oss << " -daemonize";
     return oss.str();
 }
@@ -689,6 +776,30 @@ bool QemuServiceImpl::SendTextToVm(const std::string& vm_id, const std::string& 
         }
     }
     return doSendTextViaQmp(path, text, keyboard_layout, err_out);
+}
+
+std::vector<std::string> QemuServiceImpl::getServiceLogs(int max_lines) const {
+    std::vector<std::string> result;
+    const std::string path = config_->log_path();
+    if (path.empty()) return result;
+    std::ifstream f(path);
+    if (!f.is_open()) return result;
+    if (max_lines <= 0) max_lines = 500;
+    std::deque<std::string> tail;
+    std::string line;
+    while (std::getline(f, line)) {
+        tail.push_back(line);
+        if (static_cast<int>(tail.size()) > max_lines) tail.pop_front();
+    }
+    result.assign(tail.begin(), tail.end());
+    return result;
+}
+
+bool QemuServiceImpl::clearServiceLog() const {
+    const std::string path = config_->log_path();
+    if (path.empty()) return false;
+    std::ofstream f(path, std::ios::out | std::ios::trunc);
+    return f.is_open();
 }
 
 }  // namespace control

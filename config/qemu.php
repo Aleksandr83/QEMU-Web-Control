@@ -21,6 +21,7 @@ return [
     'boot_media_service_api_key' => env('BOOT_MEDIA_SERVICE_API_KEY'),
     'disable_audio' => (bool) env('QEMU_DISABLE_AUDIO', true),
     'default_architecture' => env('QEMU_DEFAULT_ARCH', 'x86_64'),
+    'default_bridge' => env('QEMU_DEFAULT_BRIDGE', 'br0'),
     'architectures' => array_values(array_filter(array_map('trim', explode(',', env('QEMU_TARGET_ARCHES', 'x86_64'))))),
     'binary_map' => [
         'x86_64' => '/usr/bin/qemu-system-x86_64',

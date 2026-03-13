@@ -19,7 +19,7 @@
         <div id="vnc-cert-warning" class="hidden mb-3 p-3 rounded-lg bg-blue-900/50 border border-blue-600 text-blue-200 text-sm">
             <div class="flex items-start justify-between gap-2">
                 <span>{!! __('ui.vm.console_cert_warning', ['url' => '<a id="vnc-cert-url" href="#" target="_blank" class="underline font-mono"></a>']) !!}</span>
-                <button onclick="document.getElementById('vnc-cert-warning').style.display='none'" class="shrink-0 text-blue-300 hover:text-white leading-none text-lg mt-0.5" aria-label="Close">&times;</button>
+                <button type="button" id="vnc-cert-warning-close" class="shrink-0 text-blue-300 hover:text-white leading-none text-lg mt-0.5 px-1 -mx-1 cursor-pointer" aria-label="Close">&times;</button>
             </div>
         </div>
         @endif
@@ -89,7 +89,9 @@
         const statusUrl = document.getElementById('vnc-status-url');
         statusUrl.textContent = wsUrl;
 
+        const CERT_WARNING_KEY = 'vnc_cert_warning_dismissed';
         function showCertWarning() {
+            if (localStorage.getItem(CERT_WARNING_KEY)) return;
             const warn = document.getElementById('vnc-cert-warning');
             const link = document.getElementById('vnc-cert-url');
             if (warn && link && wsUrl.startsWith('wss://')) {
@@ -100,6 +102,17 @@
                 warn.classList.remove('hidden');
             }
         }
+        function dismissCertWarning() {
+            localStorage.setItem(CERT_WARNING_KEY, '1');
+            const warn = document.getElementById('vnc-cert-warning');
+            if (warn) warn.classList.add('hidden');
+        }
+        document.body.addEventListener('click', function(e) {
+            if (e.target?.id === 'vnc-cert-warning-close' || e.target?.closest?.('#vnc-cert-warning-close')) {
+                e.preventDefault();
+                dismissCertWarning();
+            }
+        });
 
         if (debug) {
             console.log('[VNC] wsUrl:', wsUrl);

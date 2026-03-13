@@ -20,6 +20,7 @@ message StartVmRequest {
   string network_type = 8;
   int32 vnc_port = 9;
   string bridge_name = 10;
+  string bridge_interface = 14;
   string mac_address = 11;
   string qmp_socket_path = 12;
   bool enable_kvm = 13;

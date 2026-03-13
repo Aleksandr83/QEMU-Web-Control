@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\VirtualMachine;
+use App\Services\QemuControlServiceClient;
 use App\Services\QemuService;
 use App\Services\VncTokenService;
 use Illuminate\Http\JsonResponse;
@@ -60,6 +61,7 @@ class VirtualMachineController extends Controller
         $vmId = old('vm_id') ?? (string) \Illuminate\Support\Str::uuid();
         $defaultDiskPath = old('primary_disk_path') ?? $this->buildPrimaryDiskPath($vmId);
 
+        $networkInterfaces = (new QemuControlServiceClient(config('qemu.qemu_control_service_url')))->getInterfaces() ?? [];
         return view('vms.create', [
             'vmId' => $vmId,
             'defaultDiskPath' => $defaultDiskPath,
@@ -67,6 +69,7 @@ class VirtualMachineController extends Controller
             'architectureOptions' => $this->architectureOptions(),
             'isoDirectories' => $this->isoDirectories(),
             'isoFilesByPath' => $this->scanIsoFiles(),
+            'networkInterfaces' => $networkInterfaces,
         ]);
     }
 
@@ -92,6 +95,7 @@ class VirtualMachineController extends Controller
             'iso_path_dir' => 'nullable|string',
             'iso_filename' => 'nullable|string',
             'network_type' => 'required|in:user,tap,bridge',
+            'network_interface' => 'nullable|string|max:64',
             'vnc_port' => ['nullable', 'integer', 'min:5900', 'max:5999', Rule::unique('virtual_machines', 'vnc_port')],
             'autostart' => 'nullable|boolean',
             'use_audio' => 'nullable|boolean',
@@ -116,6 +120,7 @@ class VirtualMachineController extends Controller
             'architecture' => $validated['architecture'],
             'iso_path' => $this->resolveIsoPath($validated['iso_path_dir'] ?? null, $validated['iso_filename'] ?? null),
             'network_type' => $validated['network_type'],
+            'network_interface' => ($validated['network_type'] ?? '') === 'bridge' ? ($validated['network_interface'] ?? null) : null,
             'vnc_port' => $validated['vnc_port'] ?? null,
             'autostart' => $request->boolean('autostart'),
             'use_audio' => $request->boolean('use_audio'),
@@ -161,6 +166,7 @@ class VirtualMachineController extends Controller
             $groups = Group::orderBy('name')->get();
         }
 
+        $networkInterfaces = (new QemuControlServiceClient(config('qemu.qemu_control_service_url')))->getInterfaces() ?? [];
         return view('vms.edit', [
             'vm' => $vm,
             'canEdit' => $canEdit,
@@ -172,6 +178,7 @@ class VirtualMachineController extends Controller
             'defaultDiskPathHint' => rtrim(config('qemu.vm_storage', '/var/lib/qemu/vms'), '/') . '/',
             'isoDirectories' => $this->isoDirectories(),
             'isoFilesByPath' => $this->scanIsoFiles(),
+            'networkInterfaces' => $networkInterfaces,
             'users' => $users,
             'groups' => $groups,
         ]);
@@ -200,6 +207,7 @@ class VirtualMachineController extends Controller
             'iso_path_dir' => 'nullable|string',
             'iso_filename' => 'nullable|string',
             'network_type' => 'required|in:user,tap,bridge',
+            'network_interface' => 'nullable|string|max:64',
             'vnc_port' => [
                 'nullable',
                 'integer',
@@ -227,6 +235,7 @@ class VirtualMachineController extends Controller
             'architecture' => $validated['architecture'],
             'iso_path' => $this->resolveIsoPath($validated['iso_path_dir'] ?? null, $validated['iso_filename'] ?? null),
             'network_type' => $validated['network_type'],
+            'network_interface' => ($validated['network_type'] ?? '') === 'bridge' ? ($validated['network_interface'] ?? null) : null,
             'vnc_port' => $validated['vnc_port'] ?? null,
             'autostart' => $request->boolean('autostart'),
             'use_audio' => $request->boolean('use_audio'),

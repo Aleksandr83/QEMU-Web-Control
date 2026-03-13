@@ -46,5 +46,8 @@
             </div>
         </div>
     </footer>
+    <script>
+        try { localStorage.removeItem('vnc_cert_warning_dismissed'); } catch (e) {}
+    </script>
 </body>
 </html>

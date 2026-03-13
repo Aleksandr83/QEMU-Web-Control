@@ -293,6 +293,21 @@
                     </div>
                 </div>
 
+                <div id="network_interface_wrapper" class="{{ old('network_type', $vm->network_type) === 'bridge' ? '' : 'hidden' }}">
+                    <label for="network_interface" class="block text-sm font-medium text-slate-300 mb-2">
+                        {{ __('ui.vm.network_interface') }}
+                    </label>
+                    <select id="network_interface" name="network_interface" class="input-field">
+                        <option value="">{{ __('ui.vm.network_interface_default') }}</option>
+                        @foreach($networkInterfaces ?? [] as $iface)
+                            <option value="{{ $iface['name'] ?? '' }}" {{ old('network_interface', $vm->network_interface) === ($iface['name'] ?? '') ? 'selected' : '' }}>
+                                {{ ($iface['name'] ?? '') }}{{ !empty($iface['bridge']) ? ' (' . ($iface['bridge']) . ')' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">{{ __('ui.vm.network_interface_hint') }}</p>
+                </div>
+
                 <div class="flex items-center">
                     <input id="autostart" type="checkbox" name="autostart" value="1" {{ old('autostart', $vm->autostart) ? 'checked' : '' }}
                            class="rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-500 w-4 h-4">
@@ -458,6 +473,15 @@
                     const text = (sel?.value || '').trim();
                     copyToClipboard(text, isoPathDirCopyBtn);
                 });
+            }
+
+            const networkTypeEl = document.getElementById('network_type');
+            const networkInterfaceWrapper = document.getElementById('network_interface_wrapper');
+            if (networkTypeEl && networkInterfaceWrapper) {
+                function toggleNetworkInterface() {
+                    networkInterfaceWrapper.classList.toggle('hidden', networkTypeEl.value !== 'bridge');
+                }
+                networkTypeEl.addEventListener('change', toggleNetworkInterface);
             }
 
             document.addEventListener('click', function (e) {
